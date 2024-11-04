@@ -1,0 +1,19 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35424.110
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WINtp", "WINtp.csproj", "{D4A656D9-E8D8-4EAA-8EC3-0C4DD9A45EE6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Beta|Any CPU = Beta|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D4A656D9-E8D8-4EAA-8EC3-0C4DD9A45EE6}.Beta|Any CPU.ActiveCfg = Beta|Any CPU
+		{D4A656D9-E8D8-4EAA-8EC3-0C4DD9A45EE6}.Beta|Any CPU.Build.0 = Beta|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
