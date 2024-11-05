@@ -1,82 +1,88 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.ServiceProcess;
 using System.Threading;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 [assembly: AssemblyTitle("简单好用的时间同步小工具")]
 [assembly: AssemblyCopyright("Copyright (C) 2024 lalaki.cn")]
 
-[DesignerCategory("")]
-public class WINtp : ServiceBase
+[System.ComponentModel.DesignerCategory("")]
+public class WINtp : System.ServiceProcess.ServiceBase
 {
     private static readonly string exePath = typeof(WINtp).Assembly.Location;
     private static readonly ManualResetEvent evt = new(false);
     private CancellationTokenSource cts;
     private bool autoSyncTime = false;
-    private bool verbose = false;
     private static SystemTime st;
+    private bool verbose = false;
 
-    protected override void OnStart(string[] args)
+    public static void Main(string[] args)
     {
-        ThreadPool.QueueUserWorkItem(InitProfile, args);
+        using var ntp = new WINtp();
+        if (args != null && args.Contains("-k", StringComparer.OrdinalIgnoreCase))
+        {
+            Run(ntp);
+        }
+        else
+        {
+            ntp.LoadProfile(null);
+        }
     }
 
-    public void InitProfile(object args)
+    public void LoadProfile(object args)
     {
-        List<string> NtpServer = ["time.asia.apple.com", "time.windows.com", "rhel.pool.ntp.org"];
+        List<string> ntpServers = ["time.asia.apple.com", "time.windows.com", "rhel.pool.ntp.org"];
         var cfgPath = Path.Combine(Path.GetDirectoryName(exePath), "ntp.ini");
         var useDefaultNtpServer = true;
         if (File.Exists(cfgPath))
         {
-            foreach (var item in File.ReadAllLines(cfgPath))
+            var reader = new StreamReader(new FileStream(cfgPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
+            while (reader.Peek() != -1)
             {
-                var srv = (item + "").Trim().Replace(" ", "").ToLower();
-                if (StartsWithoutComment(srv))
+                var itemCfg = ("" + reader.ReadLine()).Trim().Replace(" ", "").ToLower(); //为了兼容性才这样写
+                if (StartsWithoutComment(itemCfg))
                 {
-                    if (srv.Contains("="))
+                    if (itemCfg.Contains("="))
                     {
-                        if (srv.Contains("usedefaultntpserver=false"))
+                        if (itemCfg.Contains("usedefaultntpserver=false"))
                         {
                             useDefaultNtpServer = false;
                         }
-                        else if (srv.Contains("autosynctime=true"))
+                        else if (itemCfg.Contains("autosynctime=true"))
                         {
                             autoSyncTime = true;
                         }
-                        else if (srv.Contains("verbose=true"))
+                        else if (itemCfg.Contains("verbose=true"))
                         {
                             verbose = true;
                         }
                     }
                     else
                     {
-                        if (!NtpServer.Contains(srv))
+                        if (!ntpServers.Contains(itemCfg))
                         {
-                            NtpServer.Add(srv);
+                            ntpServers.Add(itemCfg);
                         }
                     }
                 }
             }
         }
-        if (!useDefaultNtpServer && NtpServer.Count > 3)
+        if (!useDefaultNtpServer && ntpServers.Count > 3)
         {
-            NtpServer.RemoveRange(0, 3);
+            ntpServers.RemoveRange(0, 3);
         }
         using (cts = new CancellationTokenSource())
         {
-            NtpServer.ForEach(srv => ThreadPool.QueueUserWorkItem(GetNtpTime, srv));
-            if (!evt.WaitOne(10000))
+            ntpServers.ForEach(it => ThreadPool.QueueUserWorkItem(GetNtpTime, it));
+            if (!evt.WaitOne(30000))
             {
                 Environment.FailFast(exePath + " 同步时间失败，网络不畅通。");
             }
@@ -85,19 +91,6 @@ public class WINtp : ServiceBase
                 Thread.Sleep(3000);
                 Stop();
             }
-        }
-    }
-
-    public static void Main(string[] args)
-    {
-        var svc = new WINtp();
-        if (args != null && args.Contains("-k", StringComparer.OrdinalIgnoreCase))
-        {
-            Run(svc);
-        }
-        else
-        {
-            svc.InitProfile(null);
         }
     }
 
@@ -116,51 +109,71 @@ public class WINtp : ServiceBase
                        ((x & 0xff000000) >> 24)) * 1000;
     }
 
-    private void GetNtpTime(object server)
+    private void GetNtpTime(object serv)
     {
-        var date = new DateTime(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+        var time = new DateTime(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
         var data = new byte[48];
         data[0] = 0x1B;
-        try
+        IPAddress[] ip = null;
+        while (true)
         {
-            using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.SendTimeout = socket.ReceiveTimeout = 5000;
-            socket.Connect(new IPEndPoint(Dns.GetHostEntry((string)server).AddressList.ElementAtOrDefault(0), 123));
-            socket.Send(data);
-            socket.Receive(data);
-            date = date.AddMilliseconds(SwapEndianness(data, 40) + (SwapEndianness(data, 44) / 0x100000000L));
-        }
-        catch
-        {
-            return;
+            try
+            {
+                ip = Dns.GetHostAddresses((string)serv);
+                using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                socket.SendTimeout = socket.ReceiveTimeout = 5000;
+                socket.Connect(ip, 123);
+                socket.Send(data);
+                socket.Receive(data);
+                time = time.AddMilliseconds(SwapEndianness(data, 40) + (SwapEndianness(data, 44) / 0x100000000L));
+            }
+            catch
+            {
+                if (ip == null && !cts.IsCancellationRequested)
+                {
+                    Thread.Sleep(1000);
+                    continue;
+                }
+            }
+            break;
         }
         if (!cts.IsCancellationRequested)
         {
             cts.Cancel();
-            st.wYear = (short)date.Year;
-            st.wMonth = (short)date.Month;
-            st.wDay = (short)date.Day;
-            st.wHour = (short)date.Hour;
-            st.wMinute = (short)date.Minute;
-            st.wSecond = (short)date.Second;
-            if (autoSyncTime)
-            {
-                SetSystemTime(ref st);
-            }
-            if (verbose)
-            {
-                var msg = string.Format("/c echo Get Datetime from \"{0}\", {1} && pause", server, date.AddHours(TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).Hours));
-                try
-                {
-                    Process.Start("cmd.exe", msg);
-                }
-                catch
-                {
-                    Environment.FailFast(exePath + " 无法输出详细信息，请检查此电脑的 PATH 环境变量。");
-                }
-            }
+            SetSystemTime(time, serv);
             evt.Set();
         }
+    }
+
+    private void SetSystemTime(DateTime time, object serv)
+    {
+        st.wYear = (short)time.Year;
+        st.wMonth = (short)time.Month;
+        st.wDay = (short)time.Day;
+        st.wHour = (short)time.Hour;
+        st.wMinute = (short)time.Minute;
+        st.wSecond = (short)time.Second;
+        if (autoSyncTime)
+        {
+            SetSystemTime(ref st);
+        }
+        if (verbose)
+        {
+            var msg = string.Format("/c echo Get Datetime from \"{0}\", {1} && pause", serv, time.AddHours(TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).Hours));
+            try
+            {
+                System.Diagnostics.Process.Start("cmd.exe", msg);
+            }
+            catch
+            {
+                Environment.FailFast(exePath + " 无法输出详细信息，请检查此电脑的 PATH 环境变量。");
+            }
+        }
+    }
+
+    protected override void OnStart(string[] args)
+    {
+        ThreadPool.QueueUserWorkItem(LoadProfile, args);
     }
 
     // stackoverflow.com/questions/650849#answer-650872
