@@ -1,33 +1,42 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
-[assembly: AssemblyTitle("简单好用的时间同步小工具")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2024 lalaki.cn")]
 
 [System.ComponentModel.DesignerCategory("")]
 public class WINtp : System.ServiceProcess.ServiceBase
 {
+    private const int NTP_TYPE = 0;
+    private const int HTTP_TYPE = 1;
+    private const int WINTP_TIMEDOUT_ERROR = 1;
+    private const int PROCESS_START_ERROR = 2;
+    private const int NTP_CONNECTION_ERROR = 3;
     private static readonly Assembly asm = typeof(WINtp).Assembly;
     private static readonly ManualResetEvent evt = new(false);
     private CancellationTokenSource cts;
     private bool autoSyncTime = false;
     private static SystemTime st;
     private bool verbose = false;
+    private bool useSSL = false;
+    private static readonly char[] comments = ['-', '#', '/', ';', '<', '=', ':'];
 
     public static void Main(string[] args)
     {
         using var ntp = new WINtp();
-        if (args != null && args.Contains("-k", StringComparer.OrdinalIgnoreCase))
+        if (args != null && new string[] { "-k", "/k" }.Contains(args.LastOrDefault(), StringComparer.OrdinalIgnoreCase))
         {
             Run(ntp);
         }
@@ -37,12 +46,17 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    public void LoadProfile(object args)
+    private struct TimeServer
+    {
+        public int type;
+        public string host;
+    }
+
+    private void LoadProfile(object args)
     {
         var timeout = 0;
-        var useDefaultNtpServer = true;
         var cfgPath = Path.Combine(Path.GetDirectoryName(asm.Location), "ntp.ini");
-        List<string> ntpServers = ["time.asia.apple.com", "time.windows.com", "rhel.pool.ntp.org"];
+        List<TimeServer> servers = [];
         var hasCfg = File.Exists(cfgPath);
         if (hasCfg)
         {
@@ -60,105 +74,178 @@ public class WINtp : System.ServiceProcess.ServiceBase
         while (reader.Peek() != -1)
         {
             var itemCfg = ("" + reader.ReadLine()).Trim().Replace(" ", "").ToLower(); //为了兼容性才这样写
-            if (StartsWithoutComment(itemCfg))
+            if (StartsWithoutComment(itemCfg) && itemCfg.Contains("="))
             {
-                if (itemCfg.Contains("="))
+                if (itemCfg.Contains("autosynctime=true"))
                 {
-                    if (itemCfg.Contains("usedefaultntpserver=false"))
-                    {
-                        useDefaultNtpServer = false;
-                    }
-                    else if (itemCfg.Contains("autosynctime=true"))
-                    {
-                        autoSyncTime = true;
-                    }
-                    else if (itemCfg.Contains("verbose=true"))
-                    {
-                        verbose = true;
-                    }
-                    else if (itemCfg.Contains("timeout="))
-                    {
-                        int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out timeout);
-                    }
+                    autoSyncTime = true;
                 }
-                else if (!ntpServers.Contains(itemCfg))
+                else if (itemCfg.Contains("verbose=true"))
                 {
-                    ntpServers.Add(itemCfg);
+                    verbose = true;
+                }
+                else if (itemCfg.Contains("usessl=true"))
+                {
+                    useSSL = true;
+                }
+                else if (itemCfg.Contains("timeout="))
+                {
+                    int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out timeout);
+                }
+                else
+                {
+                    var isNtp = itemCfg.Contains("ntps=");
+                    if (isNtp || itemCfg.Contains("urls="))
+                    {
+                        var strArr = (itemCfg.Substring(itemCfg.IndexOf('=') + 1) + "").Trim().Split(';');
+                        foreach (var it in strArr)
+                        {
+                            var mHost = it.Trim();
+                            if (mHost != "")
+                            {
+                                var serv = new TimeServer
+                                {
+                                    host = mHost,
+                                    type = isNtp ? NTP_TYPE : HTTP_TYPE
+                                };
+                                if (!servers.Contains(serv))
+                                {
+                                    servers.Add(serv);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
-        if (!useDefaultNtpServer && ntpServers.Count > 3)
+        if (servers.Count != 0)
         {
-            ntpServers.RemoveRange(0, 3);
-        }
-        using (cts = new CancellationTokenSource())
-        {
-            ntpServers.ForEach(it => ThreadPool.QueueUserWorkItem(GetNtpTime, it));
-            if (!evt.WaitOne(timeout <= 0 ? 30000 : timeout))
+            using (cts = new CancellationTokenSource())
             {
-                Environment.FailFast(asm.Location + " 同步时间失败，网络不畅通。");
-            }
-            if (args != null)
-            {
-                Thread.Sleep(3000);
-                Stop();
+                servers.ForEach(it => ThreadPool.QueueUserWorkItem(GetNetTime, it));
+                bool hasTimedOut = !evt.WaitOne(timeout <= 0 ? 30000 : timeout);
+                evt.Close();
+                if (hasTimedOut)
+                {
+                    Environment.FailFast(GetFailureMessage(WINTP_TIMEDOUT_ERROR));
+                }
+                if (args != null)
+                {
+                    Thread.Sleep(3000);
+                    Stop();
+                }
             }
         }
     }
 
-    public static bool StartsWithoutComment(string str)
+    private static bool StartsWithoutComment(string str)
     {
-        return str != "" && !new char[] { '-', '#', '/', ';', '<', '=', ':' }.Contains(str.First());
+        return str != "" && !comments.Contains(str.First());
     }
 
     // stackoverflow.com/a/3294698/162671
-    private static ulong SwapEndianness(byte[] data, int index)
+    private static ulong SwapEndianness(ulong x)
     {
-        ulong x = BitConverter.ToUInt32(data, index);
         return (((x >> 24) & 0x000000ff) | ((x >> 8) & 0x0000ff00) | ((x << 8) & 0x00ff0000) | ((x << 24) & 0xff000000)) * 1000;
     }
 
-    private void GetNtpTime(object serv)
+    private void GetNetTime(object obj)
     {
-        var time = new DateTime(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-        byte[] data = new byte[48];
-        data[0] = 0x1B;
+        var serv = (TimeServer)obj;
         IPAddress[] ip = null;
-        while (true)
+        DateTime time = DateTime.MinValue;
+        while (!cts.IsCancellationRequested)
         {
             try
             {
-                ip = Dns.GetHostAddresses((string)serv);
-                using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                socket.SendTimeout = socket.ReceiveTimeout = 5000;
-                socket.Connect(ip, 123);
-                socket.Send(data);
-                socket.Receive(data);
-                time = time.AddMilliseconds((SwapEndianness(data, 44) >> 32) + SwapEndianness(data, 40));
+                ip = Dns.GetHostAddresses(serv.host);
+                time = serv.type == HTTP_TYPE ? GetHttpTime(ip, serv.host) : GetNtpTime(ip);
             }
             catch
             {
-                if (ip == null && !cts.IsCancellationRequested)
+                if (!cts.IsCancellationRequested && ip == null)
                 {
                     Thread.Sleep(1000);
                     continue;
                 }
                 else
                 {
+                    if (verbose)
+                    {
+                        using var log = new EventLog("Application", ".", string.Format("{0} cannot connect to \"{1}\"", asm.GetName().Name, serv));
+                        log.WriteEntry(GetFailureMessage(NTP_CONNECTION_ERROR), EventLogEntryType.Error);
+                    }
                     Thread.CurrentThread.Abort();
                 }
             }
             break;
         }
-        if (!cts.IsCancellationRequested)
+        if (!DateTime.MinValue.Equals(time) && !cts.IsCancellationRequested)
         {
             cts.Cancel();
-            SetSystemTime(time, serv);
+            if (autoSyncTime)
+            {
+                Win32SetSystemTime(time);
+            }
+            if (verbose)
+            {
+                var msg = string.Format("/c echo {0} Get datetime from \"{1}\", AutoSyncTime: {2} && pause", time.ToLocalTime(), serv.host, autoSyncTime);
+                try
+                {
+                    Process.Start("cmd.exe", msg);
+                }
+                catch
+                {
+                    Environment.FailFast(GetFailureMessage(PROCESS_START_ERROR));
+                }
+            }
             evt.Set();
         }
     }
 
-    private void SetSystemTime(DateTime time, object serv)
+    private DateTime GetHttpTime(IPAddress[] ip, string host)
+    {
+        using var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        client.Connect(ip, useSSL ? 443 : 80);
+        client.Send(Encoding.ASCII.GetBytes(string.Format("HEAD / HTTP/1.1\r\nHost: {0}\r\nConnection: close\r\n\r\n", host)));
+        var reader = new StreamReader(new NetworkStream(client));
+        while (reader.Peek() != -1)
+        {
+            var line = reader.ReadLine();
+            if (line.StartsWith("Date:", StringComparison.OrdinalIgnoreCase))
+            {
+                return Convert.ToDateTime(line.Substring(5)).ToUniversalTime();//rfc1123
+            }
+        }
+        throw new SocketException();
+    }
+
+    private static DateTime GetNtpTime(IPAddress[] ip)
+    {
+        var time = new DateTime(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+        var data = new byte[48];
+        data[0] = 0x1B;
+        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.Connect(ip, 123);
+        socket.Send(data);
+        socket.Receive(data);
+        unsafe
+        {
+            fixed (byte* ptr = data)
+            {
+                var intPart = (uint*)(ptr + 40);
+                var fractPart = (uint*)(ptr + 44);
+                return time.AddMilliseconds(SwapEndianness(*intPart) + (SwapEndianness(*fractPart) >> 32));
+            }
+        }
+    }
+
+    private static string GetFailureMessage(int errorCode)
+    {
+        return string.Format("程序路径: {0}\r\n代码: {1}, 可在 https://wintp.sourceforge.io/ 获取帮助。", asm.Location, errorCode);
+    }
+
+    private static void Win32SetSystemTime(DateTime time)
     {
         st.wYear = (short)time.Year;
         st.wMonth = (short)time.Month;
@@ -166,22 +253,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
         st.wHour = (short)time.Hour;
         st.wMinute = (short)time.Minute;
         st.wSecond = (short)time.Second;
-        if (autoSyncTime)
-        {
-            SetSystemTime(ref st);
-        }
-        if (verbose)
-        {
-            var msg = string.Format("/c echo Get Datetime from \"{0}\", {1} && pause", serv, time.ToLocalTime());
-            try
-            {
-                System.Diagnostics.Process.Start("cmd.exe", msg);
-            }
-            catch
-            {
-                Environment.FailFast(asm.Location + " 无法输出详细信息，请检查此电脑的 PATH 环境变量。");
-            }
-        }
+        SetSystemTime(ref st);
     }
 
     protected override void OnStart(string[] args)

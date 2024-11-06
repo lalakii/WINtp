@@ -2,6 +2,7 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
+    <StartupObject />
     <LangVersion>preview</LangVersion>
     <ProjectGuid>{D4A656D9-E8D8-4EAA-8EC3-0C4DD9A45EE6}</ProjectGuid>
     <OutputType>WinExe</OutputType>
@@ -9,32 +10,33 @@
     <AssemblyName>WINtp</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>false</Deterministic>
     <ApplicationManifest>WINtp.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Beta|AnyCPU'">
     <OutputPath>bin\</OutputPath>
-    <NoWarn>S3903;S1186;</NoWarn>
+    <NoWarn>S3903;</NoWarn>
     <Optimize>true</Optimize>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>true</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup>
-    <StartupObject />
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <UseWinFormsOutOfProcDesigner>False</UseWinFormsOutOfProcDesigner>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="WINtp.cs" />
     <Reference Include="System" />
     <Reference Include="Microsoft.CSharp" />
-    <Compile Include="WINtp.cs" />
+    <Reference Include="System.ServiceProcess" />
     <EmbeddedResource Include="ntp.ini" />
     <None Include="WINtp.manifest" />
-    <Reference Include="System.Configuration.Install" />
-    <Reference Include="System.ServiceProcess" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>IF NOT "%25DEV_PRIVATE_KEY%25"=="" (
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+    <PostBuildEvent>IF NOT "%2525DEV_PRIVATE_KEY%2525"=="" (
     lalaki_sign "$(TargetPath)"
 )</PostBuildEvent>
   </PropertyGroup>
