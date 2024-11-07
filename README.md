@@ -3,11 +3,11 @@
 [![Latest Version](https://img.shields.io/github/v/release/lalakii/WINtp?logo=github)](https://github.com/lalakii/WINtp/releases)
 [![License: Apache-2.0 (shields.io)](https://img.shields.io/badge/License-Apache--2.0-c02041?logo=apache)](LICENSE)
 
-[<img alt="Download WINtp" src="https://sourceforge.net/sflogo.php?type=18&amp;group_id=3814875" width=268></a>](https://sourceforge.net/projects/wintp/)
+[<img alt="Download WINtp" src="https://sourceforge.net/sflogo.php?type=17&amp;group_id=3814875" width=268></a>](https://sourceforge.net/projects/wintp/)
 
 [<img alt="WINtp Logo" src="https://fastly.jsdelivr.net/gh/lalakii/WINtp@master/wintp.jpg" width=70></a>](https://sourceforge.net/projects/wintp/)
 
-[ [中文](README.md) | [English](README_en.md) ]
+[ [中文](tree/README.md) | [English](tree/README_en.md) ]
 
 ## 它是一个简单的时钟同步小工具，目前适用于 Windows 操作系统
 
