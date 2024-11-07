@@ -11,8 +11,8 @@ using System.Text;
 using System.Threading;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2024 lalaki.cn")]
 
@@ -24,14 +24,15 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private const int WINTP_TIMEDOUT_ERROR = 1;
     private const int PROCESS_START_ERROR = 2;
     private const int NTP_CONNECTION_ERROR = 3;
-    private static readonly Assembly asm = typeof(WINtp).Assembly;
-    private static readonly ManualResetEvent evt = new(false);
-    private CancellationTokenSource cts;
     private bool autoSyncTime = false;
     private static SystemTime st;
     private bool verbose = false;
     private bool useSSL = false;
+    private Timer timer;
+    private int delay;
+    private static readonly Assembly asm = typeof(WINtp).Assembly;
     private static readonly char[] comments = ['-', '#', '/', ';', '<', '=', ':'];
+    private static readonly DateTime timeOf1900 = new(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
     public static void Main(string[] args)
     {
@@ -44,12 +45,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
         {
             ntp.LoadProfile(null);
         }
-    }
-
-    private struct TimeServer
-    {
-        public int type;
-        public string host;
     }
 
     private void LoadProfile(object args)
@@ -92,6 +87,10 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 {
                     int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out timeout);
                 }
+                else if (itemCfg.Contains("delay="))
+                {
+                    int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out delay);
+                }
                 else
                 {
                     var isNtp = itemCfg.Contains("ntps=");
@@ -120,22 +119,41 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
         if (servers.Count != 0)
         {
-            using (cts = new CancellationTokenSource())
+            ManualResetEvent evt = new(false);
+            using CancellationTokenSource cts = new();
+            servers.ForEach(it =>
             {
-                servers.ForEach(it => ThreadPool.QueueUserWorkItem(GetNetTime, it));
-                bool hasTimedOut = !evt.WaitOne(timeout <= 0 ? 30000 : timeout);
-                evt.Close();
-                if (hasTimedOut)
-                {
-                    Environment.FailFast(GetFailureMessage(WINTP_TIMEDOUT_ERROR));
-                }
-                if (args != null)
+                it.cts = cts;
+                it.evt = evt;
+                ThreadPool.QueueUserWorkItem(GetNetTime, it);
+            });
+            bool hasTimedOut = !evt.WaitOne(timeout <= 0 ? 30000 : timeout);
+            evt.Close();
+            if (hasTimedOut)
+            {
+                Environment.FailFast(GetFailureMessage(WINTP_TIMEDOUT_ERROR));
+            }
+            if (args != null && timer == null)
+            {
+                if (delay <= 0)
                 {
                     Thread.Sleep(3000);
                     Stop();
                 }
+                else
+                {
+                    timer = new Timer(_ =>
+                   {
+                       OnStart(null);
+                   }, null, 0, delay * 1000);
+                }
             }
         }
+    }
+
+    protected override void OnStop()
+    {
+        timer?.Dispose();
     }
 
     private static bool StartsWithoutComment(string str)
@@ -143,18 +161,12 @@ public class WINtp : System.ServiceProcess.ServiceBase
         return str != "" && !comments.Contains(str.First());
     }
 
-    // stackoverflow.com/a/3294698/162671
-    private static ulong SwapEndianness(ulong x)
-    {
-        return (((x >> 24) & 0x000000ff) | ((x >> 8) & 0x0000ff00) | ((x << 8) & 0x00ff0000) | ((x << 24) & 0xff000000)) * 1000;
-    }
-
     private void GetNetTime(object obj)
     {
         var serv = (TimeServer)obj;
         IPAddress[] ip = null;
         DateTime time = DateTime.MinValue;
-        while (!cts.IsCancellationRequested)
+        while (!serv.cts.IsCancellationRequested)
         {
             try
             {
@@ -163,7 +175,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
             }
             catch
             {
-                if (!cts.IsCancellationRequested && ip == null)
+                if (!serv.cts.IsCancellationRequested && ip == null)
                 {
                     Thread.Sleep(1000);
                     continue;
@@ -180,9 +192,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
             }
             break;
         }
-        if (!DateTime.MinValue.Equals(time) && !cts.IsCancellationRequested)
+        if (!DateTime.MinValue.Equals(time) && !serv.cts.IsCancellationRequested)
         {
-            cts.Cancel();
+            serv.cts.Cancel();
             if (autoSyncTime)
             {
                 Win32SetSystemTime(time);
@@ -199,7 +211,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     Environment.FailFast(GetFailureMessage(PROCESS_START_ERROR));
                 }
             }
-            evt.Set();
+            serv.evt.Set();
         }
     }
 
@@ -222,7 +234,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
     private static DateTime GetNtpTime(IPAddress[] ip)
     {
-        var time = new DateTime(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
         var data = new byte[48];
         data[0] = 0x1B;
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
@@ -233,9 +244,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
         {
             fixed (byte* ptr = data)
             {
-                var intPart = (uint*)(ptr + 40);
-                var fractPart = (uint*)(ptr + 44);
-                return time.AddMilliseconds(SwapEndianness(*intPart) + (SwapEndianness(*fractPart) >> 32));
+                var intPart = (ulong*)(ptr + 40);
+                var fractPart = (ulong*)(ptr + 44);
+                return timeOf1900.AddMilliseconds((SwapEndianness(*fractPart) >> 32) + SwapEndianness(*intPart));
             }
         }
     }
@@ -261,6 +272,12 @@ public class WINtp : System.ServiceProcess.ServiceBase
         ThreadPool.QueueUserWorkItem(LoadProfile, args);
     }
 
+    // stackoverflow.com/a/3294698/162671
+    private static ulong SwapEndianness(ulong x)
+    {
+        return (((x >> 24) & 0x000000ff) | ((x >> 8) & 0x0000ff00) | ((x << 8) & 0x00ff0000) | ((x << 24) & 0xff000000)) * 1000;
+    }
+
     // stackoverflow.com/questions/650849#answer-650872
     [DllImport("kernel32.dll")]
     private static extern bool SetSystemTime(ref SystemTime time);
@@ -276,5 +293,13 @@ public class WINtp : System.ServiceProcess.ServiceBase
         public short wMinute;
         public short wSecond;
         public short wMilliseconds;
+    }
+
+    private struct TimeServer
+    {
+        public int type;
+        public string host;
+        public ManualResetEvent evt;
+        public CancellationTokenSource cts;
     }
 }
