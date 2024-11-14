@@ -7,7 +7,7 @@
 
 [<img alt="WINtp Logo" src="https://fastly.jsdelivr.net/gh/lalakii/WINtp@master/wintp.jpg" width=70></a>](https://sourceforge.net/projects/wintp/)
 
-[ [中文](README.md) | [English](README_en.md) ]
+[ [中文](tree/README.md) | [English](tree/README_en.md) ]
 
 ## It is a simple clock synchronization tool, currently suitable for Windows operating systems
 
