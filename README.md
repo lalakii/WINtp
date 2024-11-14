@@ -7,7 +7,7 @@
 
 [<img alt="WINtp Logo" src="https://fastly.jsdelivr.net/gh/lalakii/WINtp@master/wintp.jpg" width=70></a>](https://sourceforge.net/projects/wintp/)
 
-[ [中文](tree/README.md) | [English](tree/README_en.md) ]
+[ [中文](README.md) | [English](README_en.md) ]
 
 ## 它是一个简单的时钟同步小工具，目前适用于 Windows 操作系统
 
@@ -18,9 +18,9 @@
 ## 下载地址
 
 - [本地下载](https://github.com/lalakii/WINtp/releases)
-- [蓝奏云 1](https://a01.lanzoui.com/iqehF2egumoj)
-- [蓝奏云 2](https://a01.lanzout.com/iqehF2egumoj)
-- [蓝奏云 3](https://a01.lanzouv.com/iqehF2egumoj)
+- [蓝奏云 1](https://a01.lanzoui.com/iG6vb2f3mgwb)
+- [蓝奏云 2](https://a01.lanzout.com/iG6vb2f3mgwb)
+- [蓝奏云 3](https://a01.lanzouv.com/iG6vb2f3mgwb)
 
 ### 如何使用它？
 
