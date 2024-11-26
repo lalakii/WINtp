@@ -10,8 +10,8 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyFileVersion("1.7.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2024 lalaki.cn")]
 
@@ -27,7 +27,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private static readonly DateTime TimeOf1900 = new(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
     private static readonly Assembly Wintp = typeof(WINtp).Assembly;
     private static SystemTime st;
-    private bool autoSyncTime;
+    private bool autoSync;
     private int delay;
     private Timer timer;
     private bool useSSL;
@@ -66,8 +66,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
         var data = new byte[48];
         data[0] = 0x1B;
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Connect(ip, 123);
-        socket.Send(data);
+        socket.SendTo(data, new IPEndPoint(ip.FirstOrDefault(), 123));
         socket.Receive(data);
         unsafe
         {
@@ -80,14 +79,14 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    // stackoverflow.com/a/20847931/28134812
-    [DllImport("kernel32.dll")]
-    private static extern bool SetSystemTime(ref SystemTime st);
-
-    private static bool StartsWithoutComment(string str)
+    private static bool IsComments(string str)
     {
         return str != string.Empty && !Comments.Contains(str.FirstOrDefault());
     }
+
+    // stackoverflow.com/a/20847931/28134812
+    [DllImport("kernel32.dll")]
+    private static extern bool SetSystemTime(ref SystemTime st);
 
     // stackoverflow.com/a/3294698/162671
     private static ulong SwapEndianness(ulong x)
@@ -95,14 +94,15 @@ public class WINtp : System.ServiceProcess.ServiceBase
         return (((x >> 24) & 0x000000ff) | ((x >> 8) & 0x0000ff00) | ((x << 8) & 0x00ff0000) | ((x << 24) & 0xff000000)) * 1000UL;
     }
 
-    private static void Win32SetSystemTime(DateTime time)
+    private static void Win32SetSystemTime(DateTime t)
     {
-        st.Year = (short)time.Year;
-        st.Month = (short)time.Month;
-        st.Day = (short)time.Day;
-        st.Hour = (short)time.Hour;
-        st.Minute = (short)time.Minute;
-        st.Second = (short)time.Second;
+        st.Year = (short)t.Year;
+        st.Month = (short)t.Month;
+        st.Day = (short)t.Day;
+        st.Hour = (short)t.Hour;
+        st.Minute = (short)t.Minute;
+        st.Second = (short)t.Second;
+        st.Millisecond = (short)t.Millisecond;
         SetSystemTime(ref st);
     }
 
@@ -111,10 +111,10 @@ public class WINtp : System.ServiceProcess.ServiceBase
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Connect(ip, this.useSSL ? 443 : 80);
         socket.Send(System.Text.Encoding.UTF8.GetBytes(string.Format("HEAD / HTTP/1.1\r\nHost: {0}\r\nConnection: close\r\n\r\n", host)));
-        StreamReader reader = new(new NetworkStream(socket));
-        while (reader.Peek() != -1)
+        StreamReader rdr = new(new NetworkStream(socket));
+        while (rdr.Peek() != -1)
         {
-            var line = reader.ReadLine();
+            var line = rdr.ReadLine();
             if (line.StartsWith("Date:", StringComparison.OrdinalIgnoreCase))
             {
                 return Convert.ToDateTime(line.Substring(5)).ToUniversalTime();
@@ -165,14 +165,14 @@ public class WINtp : System.ServiceProcess.ServiceBase
             if (time is DateTime local && !sh.IsClosed)
             {
                 serv.ResetEvent.Close();
-                if (this.autoSyncTime)
+                if (this.autoSync)
                 {
                     Win32SetSystemTime(local);
                 }
 
                 if (this.verbose)
                 {
-                    var msg = string.Format("/c echo {0} Get datetime from \"{1}\", AutoSyncTime: {2} && pause", local.ToLocalTime(), serv.HostName, this.autoSyncTime);
+                    var msg = string.Format("/c echo {0} Get datetime from \"{1}\", AutoSyncTime: {2} && pause", local.ToLocalTime(), serv.HostName, this.autoSync);
                     try
                     {
                         Process.Start("cmd.exe", msg);
@@ -197,23 +197,23 @@ public class WINtp : System.ServiceProcess.ServiceBase
             File.SetAttributes(cfgPath, File.GetAttributes(cfgPath) & ~FileAttributes.ReadOnly);
         }
 
-        using (FileStream cfgStream = new(cfgPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
+        using (FileStream pCfg = new(cfgPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
         {
             if (!hasCfg)
             {
-                Wintp.GetManifestResourceStream(Wintp.GetManifestResourceNames().FirstOrDefault()).CopyTo(cfgStream);
-                cfgStream.Position = 0;
+                Wintp.GetManifestResourceStream(Wintp.GetManifestResourceNames().FirstOrDefault()).CopyTo(pCfg);
+                pCfg.Position = 0;
             }
 
-            StreamReader reader = new(cfgStream);
-            while (reader.Peek() != -1)
+            StreamReader rdr = new(pCfg);
+            while (rdr.Peek() != -1)
             {
-                var itemCfg = (string.Empty + reader.ReadLine()).Trim().Replace(" ", string.Empty).ToLower();
-                if (StartsWithoutComment(itemCfg) && itemCfg.Contains("="))
+                var itemCfg = (string.Empty + rdr.ReadLine()).Trim().Replace(" ", string.Empty).ToLower();
+                if (IsComments(itemCfg) && itemCfg.Contains("="))
                 {
                     if (itemCfg.Contains("autosynctime=true"))
                     {
-                        this.autoSyncTime = true;
+                        this.autoSync = true;
                     }
                     else if (itemCfg.Contains("verbose=true"))
                     {
@@ -296,7 +296,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
         public short Hour;
         public short Minute;
         public short Second;
-        public short Milliseconds;
+        public short Millisecond;
     }
 
     private struct TimeServer
