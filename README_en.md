@@ -7,7 +7,7 @@
 
 [<img alt="WINtp Logo" src="https://fastly.jsdelivr.net/gh/lalakii/WINtp@master/wintp.jpg" width=70></a>](https://sourceforge.net/projects/wintp/)
 
-[ [中文](tree/README.md) | [English](tree/README_en.md) ]
+[ [中文](./README.md) | [English](./README_en.md) ]
 
 ## It is a simple clock synchronization tool, currently suitable for Windows operating systems
 
@@ -18,9 +18,9 @@ I created this tool. It now supports retrieving time from websites using the TCP
 ## Downloads
 
 - [Github](https://github.com/lalakii/WINtp/releases)
-- [Lanzou 1](https://a01.lanzoui.com/iW2VR2gd54fg)
-- [Lanzou 2](https://a01.lanzout.com/iW2VR2gd54fg)
-- [Lanzou 3](https://a01.lanzouv.com/iW2VR2gd54fg)
+- [Lanzou 1](https://a01.lanzoui.com/ifqXI2orftha)
+- [Lanzou 2](https://a01.lanzout.com/ifqXI2orftha)
+- [Lanzou 3](https://a01.lanzouv.com/ifqXI2orftha)
 
 ### How to use it?
 

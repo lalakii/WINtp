@@ -1,42 +1,37 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Threading;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.7.0.0")]
-[assembly: AssemblyFileVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
+[assembly: AssemblyFileVersion("1.8.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
-[assembly: AssemblyCopyright("Copyright (C) 2024 lalaki.cn")]
+[assembly: AssemblyCopyright("Copyright (C) 2025 lalaki.cn")]
 
 [System.ComponentModel.DesignerCategory("")]
 public class WINtp : System.ServiceProcess.ServiceBase
 {
-    private const string Comments = "'-#/;<=:";
     private const int HttpRequestType = 1;
     private const int NetworkConnectionError = -3;
     private const int NtpRequestType = 0;
     private const int ProcessStartFailure = -2;
     private const int TimeoutError = -1;
+    private static readonly string[] PArray = ["-k", "/k"];
     private static readonly DateTime TimeOf1900 = new(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
     private static readonly Assembly Wintp = typeof(WINtp).Assembly;
     private static SystemTime st;
     private bool autoSync;
     private int delay;
-    private Timer timer;
+    private Timer? timer;
     private bool useSSL;
     private bool verbose;
 
     public static void Main(string[] args)
     {
         using WINtp ntp = new();
-        if (args != null && new string[] { "-k", "/k" }.Contains(args.LastOrDefault(), StringComparer.OrdinalIgnoreCase))
+        if (args != null && PArray.Contains(args.LastOrDefault(), StringComparer.OrdinalIgnoreCase))
         {
             Run(ntp);
         }
@@ -46,14 +41,34 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    protected override void OnStart(string[] args)
+    protected override void OnStart(string[]? args)
     {
-        ThreadPool.QueueUserWorkItem(this.LoadProfile, args);
+        ThreadPool.UnsafeQueueUserWorkItem(this.LoadProfile, args);
     }
 
     protected override void OnStop()
     {
         this.timer?.Dispose();
+    }
+
+    private static void AddAll(List<TimeServer> servers, string[] items, bool isNtp)
+    {
+        foreach (var it in items)
+        {
+            var mHost = it.Trim();
+            if (mHost != string.Empty)
+            {
+                TimeServer serv = new()
+                {
+                    HostName = mHost,
+                    RequestType = isNtp ? NtpRequestType : HttpRequestType,
+                };
+                if (!servers.Contains(serv))
+                {
+                    servers.Add(serv);
+                }
+            }
+        }
     }
 
     private static string GetFailureMessage(int errorCode)
@@ -79,19 +94,14 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    private static bool IsComments(string str)
-    {
-        return str != string.Empty && !Comments.Contains(str.FirstOrDefault());
-    }
-
     // stackoverflow.com/a/20847931/28134812
     [DllImport("kernel32.dll")]
     private static extern bool SetSystemTime(ref SystemTime st);
 
     // stackoverflow.com/a/3294698/162671
-    private static ulong SwapEndianness(ulong x)
+    private static long SwapEndianness(ulong x)
     {
-        return (((x >> 24) & 0x000000ff) | ((x >> 8) & 0x0000ff00) | ((x << 8) & 0x00ff0000) | ((x << 24) & 0xff000000)) * 1000UL;
+        return IPAddress.NetworkToHostOrder((long)x) * 1000L;
     }
 
     private static void Win32SetSystemTime(DateTime t)
@@ -129,7 +139,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
         if (obj is TimeServer serv)
         {
             var sh = serv.ResetEvent.SafeWaitHandle;
-            IPAddress[] ip = null;
+            IPAddress[]? ip = null;
             DateTime? time = null;
             while (!sh.IsClosed)
             {
@@ -186,85 +196,31 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    private void LoadProfile(object args)
+    private void LoadProfile(object? args)
     {
-        var timeout = 0;
         List<TimeServer> servers = [];
-        var cfgPath = Path.Combine(Path.GetDirectoryName(Wintp.Location), "ntp.ini");
-        var hasCfg = File.Exists(cfgPath);
-        if (hasCfg)
+        var cfgPath = Path.Combine(Path.GetDirectoryName(Wintp.Location), "WINtp.exe.config");
+        if (!File.Exists(cfgPath))
         {
-            File.SetAttributes(cfgPath, File.GetAttributes(cfgPath) & ~FileAttributes.ReadOnly);
+            using var pCfg = File.Create(cfgPath);
+            Wintp.GetManifestResourceStream(Wintp.GetManifestResourceNames().FirstOrDefault()).CopyTo(pCfg);
         }
 
-        using (FileStream pCfg = new(cfgPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
-        {
-            if (!hasCfg)
-            {
-                Wintp.GetManifestResourceStream(Wintp.GetManifestResourceNames().FirstOrDefault()).CopyTo(pCfg);
-                pCfg.Position = 0;
-            }
-
-            StreamReader rdr = new(pCfg);
-            while (rdr.Peek() != -1)
-            {
-                var itemCfg = (string.Empty + rdr.ReadLine()).Trim().Replace(" ", string.Empty).ToLower();
-                if (IsComments(itemCfg) && itemCfg.Contains("="))
-                {
-                    if (itemCfg.Contains("autosynctime=true"))
-                    {
-                        this.autoSync = true;
-                    }
-                    else if (itemCfg.Contains("verbose=true"))
-                    {
-                        this.verbose = true;
-                    }
-                    else if (itemCfg.Contains("usessl=true"))
-                    {
-                        this.useSSL = true;
-                    }
-                    else if (itemCfg.Contains("timeout="))
-                    {
-                        int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out timeout);
-                    }
-                    else if (itemCfg.Contains("delay="))
-                    {
-                        int.TryParse(itemCfg.Substring(itemCfg.IndexOf('=') + 1), out this.delay);
-                    }
-                    else
-                    {
-                        var isNtp = itemCfg.Contains("ntps=");
-                        if (isNtp || itemCfg.Contains("urls="))
-                        {
-                            foreach (var it in (itemCfg.Substring(itemCfg.IndexOf('=') + 1) + string.Empty).Trim().Split(';'))
-                            {
-                                var mHost = it.Trim();
-                                if (mHost != string.Empty)
-                                {
-                                    TimeServer serv = new()
-                                    {
-                                        HostName = mHost,
-                                        RequestType = isNtp ? NtpRequestType : HttpRequestType,
-                                    };
-                                    if (!servers.Contains(serv))
-                                    {
-                                        servers.Add(serv);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        var reader = new System.Configuration.AppSettingsReader();
+        _ = bool.TryParse($"{reader.GetValue("Verbose", typeof(bool))}", out verbose);
+        _ = bool.TryParse($"{reader.GetValue("AutoSyncTime", typeof(bool))}", out autoSync);
+        _ = bool.TryParse($"{reader.GetValue("UseSsl", typeof(bool))}", out useSSL);
+        _ = int.TryParse($"{reader.GetValue("Delay", typeof(int))}", out delay);
+        _ = int.TryParse($"{reader.GetValue("Timeout", typeof(int))}", out int timeout);
+        AddAll(servers, $"{reader.GetValue("Ntps", typeof(string))}".Split(';'), true);
+        AddAll(servers, $"{reader.GetValue("Urls", typeof(string))}".Split(';'), false);
         if (servers.Count != 0)
         {
             ManualResetEvent evt = new(false);
             servers.ForEach(it =>
             {
                 it.ResetEvent = evt;
-                ThreadPool.QueueUserWorkItem(this.GetNetTime, it);
+                ThreadPool.UnsafeQueueUserWorkItem(this.GetNetTime, it);
             });
             if (!evt.WaitOne(timeout < 1 ? 30000 : timeout))
             {
