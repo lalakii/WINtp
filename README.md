@@ -37,13 +37,13 @@
 <configuration>
 	<appSettings>
 		<add key="AutoSyncTime" value="false" />
-		<!-- The "Automatic Time Synchronization" switch will not sync the system time if commented out or set to false (to prevent antivirus false positives).-->
+		<!-- 自动同步系统时间的开关，此参数默认为 false 目的为了防止杀软误报，用户应当手动设为true -->
 		<add key="Verbose" value="false" /> <!-- 在事件管理器中打印日志 -->
 		<add key="UseSsl" value="false" /> <!-- 使用https协议 -->
 		<add key="Delay" value="3600" /> <!-- 时间同步周期，默认3600秒 -->
 		<add key="Timeout" value="30000" /> <!-- 单个请求超时，默认30000毫秒(30秒) -->
 		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- ntp服务器 -->
-		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- http网站 -->
+		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- 网站域名 -->
 	</appSettings>
 </configuration>
 ```

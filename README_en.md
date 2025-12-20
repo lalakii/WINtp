@@ -32,46 +32,20 @@ It is recommended to install it as a system service, but you can also set it as 
 
 ### Configuration
 
-```conf
-# A simple time synchronization tool: WINtp.
-#
-# This configuration file is required to store the configuration parameters needed for the program to run.
-# If you need to restore it to default values, simply delete it, and a new one will be automatically generated upon program startup.
-# If you want to customize the NTP server, just add it following the pattern:
-#
-Ntps = time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;
-
-# The "Automatic Time Synchronization" switch will not sync the system time if commented out or set to false (to prevent antivirus false positives).
-#
-AutoSyncTime = true
-
-# The default unit for "Scheduled Synchronization" is seconds, with 3600 seconds meaning synchronization occurs once per hour. It is disabled by default and will only take effect when the service is running.
-#
-# Delay = 3600
-
-# If, for some reason, you cannot access the UDP port, you can uncomment the line below, and the program will retrieve the time via TCP protocol from the specified website.
-# This option does not conflict with NTP; both can coexist or be used as alternatives.
-# If NTP can synchronize the time, do not enable this option.
-#
-# Urls = www.baidu.com;www.qq.com;www.google.com;
-#
-# The default is to retrieve data from port 80. If you need to use port 443, uncomment the line below.
-#
-# UseSSL = true
-
-# If you need to print detailed information, uncomment the line below.
-#
-# Verbose = true
-
-# If you need to customize the timeout, modify the parameter below, in milliseconds
-# You can increase the value if the network is poor
-# The default timeout is 30 seconds; if the time cannot be obtained, the program will exit and print an error message in the event viewer.
-#
-# Timeout = 30000
-
-####################
-#   by lalaki.cn  ##
-####################
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+	<appSettings>
+		<add key="AutoSyncTime" value="false" />
+		<!-- The "Automatic Time Synchronization" switch will not sync the system time if commented out or set to false (to prevent antivirus false positives).-->
+		<add key="Verbose" value="false" /> <!-- Print logs in Event Manager -->
+		<add key="UseSsl" value="false" /> <!-- Using the HTTPS protocol -->
+		<add key="Delay" value="3600" /> <!-- Time synchronization period, default 3600 seconds. -->
+		<add key="Timeout" value="30000" /> <!-- The timeout for a single request is 30,000 milliseconds (30 seconds) by default. -->
+		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- NTP Servers -->
+		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- WebWebsite domain -->
+	</appSettings>
+</configuration>
 ```
 
 ### By lalaki.cn
