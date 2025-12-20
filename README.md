@@ -18,9 +18,9 @@
 ## 下载地址
 
 - [本地下载](https://github.com/lalakii/WINtp/releases)
-- [蓝奏云 1](https://a01.lanzoui.com/ifqXI2orftha)
-- [蓝奏云 2](https://a01.lanzout.com/ifqXI2orftha)
-- [蓝奏云 3](https://a01.lanzouv.com/ifqXI2orftha)
+- [蓝奏云 1](https://a01.lanzoui.com/iLD8U3e4y59a)
+- [蓝奏云 2](https://a01.lanzout.com/iLD8U3e4y59a)
+- [蓝奏云 3](https://a01.lanzouv.com/iLD8U3e4y59a)
 
 ## 如何使用？
 
