@@ -5,10 +5,10 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("1.8.0.0")]
-[assembly: AssemblyFileVersion("1.8.0.0")]
+[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyFileVersion("1.9.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
-[assembly: AssemblyCopyright("Copyright (C) 2025 lalaki.cn")]
+[assembly: AssemblyCopyright("Copyright (C) 2026 lalaki.cn")]
 
 [System.ComponentModel.DesignerCategory("")]
 public class WINtp : System.ServiceProcess.ServiceBase
@@ -76,33 +76,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
         return string.Format("程序路径: {0}\r\n代码: {1}, 可在 https://wintp.sourceforge.io/ 获取帮助。", Wintp.Location, errorCode);
     }
 
-    private static DateTime GetNtpTime(IPAddress[] ip)
-    {
-        var data = new byte[48];
-        data[0] = 0x1B;
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.SendTo(data, new IPEndPoint(ip.FirstOrDefault(), 123));
-        socket.Receive(data);
-        unsafe
-        {
-            fixed (byte* ptr = data)
-            {
-                var intPart = (ulong*)(ptr + 40);
-                var fractPart = (ulong*)(ptr + 44);
-                return TimeOf1900.AddMilliseconds((SwapEndianness(*fractPart) >> 32) + SwapEndianness(*intPart));
-            }
-        }
-    }
-
     // stackoverflow.com/a/20847931/28134812
     [DllImport("kernel32.dll")]
     private static extern bool SetSystemTime(ref SystemTime st);
-
-    // stackoverflow.com/a/3294698/162671
-    private static long SwapEndianness(ulong x)
-    {
-        return IPAddress.NetworkToHostOrder((long)x) * 1000L;
-    }
 
     private static void Win32SetSystemTime(DateTime t)
     {
@@ -116,22 +92,41 @@ public class WINtp : System.ServiceProcess.ServiceBase
         SetSystemTime(ref st);
     }
 
-    private DateTime GetHttpTime(IPAddress[] ip, string host)
+    private DateTime GetNtpTime(string ntpServerUrl)
     {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Connect(ip, this.useSSL ? 443 : 80);
-        socket.Send(System.Text.Encoding.UTF8.GetBytes(string.Format("HEAD / HTTP/1.1\r\nHost: {0}\r\nConnection: close\r\n\r\n", host)));
-        StreamReader rdr = new(new NetworkStream(socket));
-        while (rdr.Peek() != -1)
+        var data = new byte[48];
+        data[0] = 0x1B;
+        using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
         {
-            var line = rdr.ReadLine();
-            if (line.StartsWith("Date:", StringComparison.OrdinalIgnoreCase))
-            {
-                return Convert.ToDateTime(line.Substring(5)).ToUniversalTime();
-            }
+            SendTimeout = 5000,
+            ReceiveTimeout = 5000,
+        };
+        udp.SendTo(data, new IPEndPoint(Dns.GetHostAddresses(ntpServerUrl).FirstOrDefault(), 123));
+        udp.Receive(data);
+        long intPart = BitConverter.ToUInt32(data, 40);
+        long fractPart = BitConverter.ToUInt32(data, 44);
+        intPart = (uint)(IPAddress.NetworkToHostOrder(intPart) >> 32);
+        fractPart = (uint)(IPAddress.NetworkToHostOrder(fractPart) >> 32);
+        long milliseconds = (intPart * 1000) + ((fractPart * 1000) >> 32);
+        var ntpDate = TimeOf1900.AddMilliseconds(milliseconds).ToUniversalTime();
+        Console.WriteLine("Time: {0}, NTP Server: {1}", ntpDate, ntpServerUrl);
+        return ntpDate;
+    }
+
+    private DateTime GetHttpTime(string httpUrl)
+    {
+        if (!httpUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            httpUrl = $"{(useSSL ? "https://" : "http://")}{httpUrl}";
         }
 
-        throw new SocketException();
+        var req = WebRequest.Create(httpUrl);
+        req.Timeout = 5000;
+        req.Method = "HEAD";
+        using var httpResposne = (HttpWebResponse)req.GetResponse();
+        var httpDate = Convert.ToDateTime(httpResposne.Headers["Date"]).ToUniversalTime();
+        Console.WriteLine("Time: {0}, HTTP Server: {1}", httpDate, httpUrl);
+        return httpDate;
     }
 
     private void GetNetTime(object obj)
@@ -139,26 +134,25 @@ public class WINtp : System.ServiceProcess.ServiceBase
         if (obj is TimeServer serv)
         {
             var sh = serv.ResetEvent.SafeWaitHandle;
-            IPAddress[]? ip = null;
             DateTime? time = null;
             while (!sh.IsClosed)
             {
                 try
                 {
-                    ip = Dns.GetHostAddresses(serv.HostName);
-                    time = serv.RequestType == NtpRequestType ? GetNtpTime(ip) : this.GetHttpTime(ip, serv.HostName);
+                    time = serv.RequestType == NtpRequestType ? this.GetNtpTime(serv.HostName) : this.GetHttpTime(serv.HostName);
                 }
                 catch
                 {
-                    if (!sh.IsClosed && ip == null)
-                    {
-                        Thread.Sleep(1000);
-                        continue;
-                    }
-                    else if (this.verbose)
+                    if (this.verbose)
                     {
                         using EventLog log = new("Application", ".", string.Format("{0} cannot connect to \"{1}\"", Wintp.GetName().Name, serv));
                         log.WriteEntry(GetFailureMessage(NetworkConnectionError), EventLogEntryType.Error);
+                    }
+
+                    if (!sh.IsClosed)
+                    {
+                        Thread.Sleep(1000);
+                        continue;
                     }
 
                     Thread.CurrentThread.Abort();
@@ -180,6 +174,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     Win32SetSystemTime(local);
                 }
 
+                Console.WriteLine("set OK");
                 if (this.verbose)
                 {
                     var msg = string.Format("/c echo {0} Get datetime from \"{1}\", AutoSyncTime: {2} && pause", local.ToLocalTime(), serv.HostName, this.autoSync);
@@ -240,6 +235,8 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 }
             }
         }
+
+        Thread.Sleep(1000);
     }
 
     [StructLayout(LayoutKind.Sequential)]
