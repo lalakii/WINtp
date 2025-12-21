@@ -18,9 +18,9 @@ I created this tool. It now supports retrieving time from websites using the TCP
 ## Downloads
 
 - [Github](https://github.com/lalakii/WINtp/releases)
-- [Lanzou 1](https://a01.lanzoui.com/iLD8U3e4y59a)
-- [Lanzou 2](https://a01.lanzout.com/iLD8U3e4y59a)
-- [Lanzou 3](https://a01.lanzouv.com/iLD8U3e4y59a)
+- [Lanzou 1](https://a01.lanzoui.com/imgiz3e5mmpc)
+- [Lanzou 2](https://a01.lanzout.com/imgiz3e5mmpc)
+- [Lanzou 3](https://a01.lanzouv.com/imgiz3e5mmpc)
 
 ### How to use it?
 
