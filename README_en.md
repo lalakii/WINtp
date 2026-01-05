@@ -24,7 +24,7 @@ I created this tool. It now supports retrieving time from websites using the TCP
 
 ## How to use it?
 
-Normally, you only need to double-click to run it. The software's main interface allows you to configure various parameters.
+The software's main interface allows you to configure various parameters; however, it will not be displayed when the software is used as a service or a startup item.
 
 It is recommended to install it as a system service, but you can also set it as a startup item (by adding the -d parameter), depending on your preference.
 
