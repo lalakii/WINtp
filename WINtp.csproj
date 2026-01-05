@@ -1,41 +1,51 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <GetDate>$([System.DateTime]::Now.ToString(yyyy-MM-dd))</GetDate>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <AssemblyName>WINtp</AssemblyName>
-    <OutputPath>.\bin\WINtp\$(GetDate)</OutputPath>
-    <OutputType>WinExe</OutputType>
-    <LangVersion>preview</LangVersion>
-    <TargetFrameworks>net481</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
-    <DebugType>none</DebugType>
-    <WarningLevel>9999</WarningLevel>
-    <IsPublishable>False</IsPublishable>
-    <AnalysisLevel>latest</AnalysisLevel>
-    <GenerateSupportedRuntime>False</GenerateSupportedRuntime>
-    <NoWarn>SA1633;SA0001;RCS1110;S3903;SA1600;SA1101;S2486;S108;S1075;SA1307;CA1050;</NoWarn>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <ApplicationManifest>WINtp.manifest</ApplicationManifest>
-    <Optimize>True</Optimize>
-    <Prefer32Bit>False</Prefer32Bit>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Remove=".gitignore" />
-    <None Remove="WINtp.exe.config" />
-    <EmbeddedResource Include="WINtp.exe.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
-    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <Reference Include="System.ServiceProcess" />
-  </ItemGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="lalaki_sign &quot;$(TargetPath)&quot;&gt;NUL 2&gt;&amp;1 &amp;" />
-  </Target>
+	<PropertyGroup>
+		<GetDate>$([System.DateTime]::Now.ToString(yyyy-MM-dd))</GetDate>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<AssemblyName>WINtp</AssemblyName>
+		<OutputPath>.\bin\WINtp\$(GetDate)</OutputPath>
+		<OutputType>WinExe</OutputType>
+		<LangVersion>preview</LangVersion>
+		<TargetFrameworks>net481</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+		<DebugType>none</DebugType>
+		<WarningLevel>9999</WarningLevel>
+		<IsPublishable>False</IsPublishable>
+		<UseWPF>True</UseWPF>
+		<AnalysisLevel>latest</AnalysisLevel>
+		<GenerateSupportedRuntime>False</GenerateSupportedRuntime>
+		<NoWarn>SA1633;SA0001;RCS1110;S3903;SA1600;SA1601;SA1101;S2486;S108;S1075;SA1307;CA1050;</NoWarn>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+		<PlatformTarget>AnyCPU</PlatformTarget>
+		<ApplicationManifest>WINtp.manifest</ApplicationManifest>
+		<Optimize>True</Optimize>
+		<Prefer32Bit>False</Prefer32Bit>
+		<AllowUnsafeBlocks>False</AllowUnsafeBlocks>
+		<ApplicationIcon>wintp.ico</ApplicationIcon>
+		<StripSymbols>True</StripSymbols>
+		<DebugType>none</DebugType>
+		<DebugSymbols>False</DebugSymbols>
+		<EnableCOMHosting>False</EnableCOMHosting>
+	</PropertyGroup>
+	<ItemGroup>
+		<None Remove=".gitignore" />
+		<None Remove="WINtp.exe.config" />
+		<Content Include="wintp.ico" />
+		<EmbeddedResource Include="WINtp.exe.config">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<Reference Include="System.Configuration" />
+		<Reference Include="System.ServiceProcess" />
+		<Reference Include="System.Windows.Forms" />
+		<Reference Include="WindowsFormsIntegration" />
+	</ItemGroup>
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="lalaki_sign &quot;$(TargetPath)&quot;&gt;NUL 2&gt;&amp;1 &amp;" />
+	</Target>
 </Project>

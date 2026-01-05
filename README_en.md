@@ -18,11 +18,11 @@ I created this tool. It now supports retrieving time from websites using the TCP
 ## Downloads
 
 - [Github](https://github.com/lalakii/WINtp/releases)
-- [Lanzou 1](https://a01.lanzoui.com/imgiz3e5mmpc)
-- [Lanzou 2](https://a01.lanzout.com/imgiz3e5mmpc)
-- [Lanzou 3](https://a01.lanzouv.com/imgiz3e5mmpc)
+- [Lanzou 1](https://a01.lanzout.com/iM5Qw3fc4owb)
+- [Lanzou 2](https://a01.lanzoui.com/iM5Qw3fc4owb)
+- [Lanzou 3](https://a01.lanzouv.com/iM5Qw3fc4owb)
 
-### How to use it?
+## How to use it?
 
 Typically, you just need to double-click to run it. The software has no UI interface; it will automatically synchronize the system time after starting.
 
@@ -30,7 +30,7 @@ Once completed, it exits immediately and runs no background processes.
 
 It is recommended to install it as a system service, but you can also set it as a startup item according to your preference.
 
-### Configuration
+## Configuration
 
 ```xml
 <?xml version="1.0" encoding="utf-8" ?>
@@ -42,8 +42,9 @@ It is recommended to install it as a system service, but you can also set it as 
 		<add key="UseSsl" value="false" /> <!-- Using the HTTPS protocol -->
 		<add key="Delay" value="3600" /> <!-- Time synchronization period, default 3600 seconds. -->
 		<add key="Timeout" value="30000" /> <!-- The timeout for a single request is 30,000 milliseconds (30 seconds) by default. -->
+		<add key="NetworkTimeout" value="5000" /> <!-- Network timeout, default 5000 milliseconds -->
 		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- NTP Servers -->
-		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- WebWebsite domain -->
+		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- WebWebsite domain(hostname) -->
 	</appSettings>
 </configuration>
 ```
