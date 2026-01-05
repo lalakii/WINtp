@@ -24,11 +24,9 @@ I created this tool. It now supports retrieving time from websites using the TCP
 
 ## How to use it?
 
-Typically, you just need to double-click to run it. The software has no UI interface; it will automatically synchronize the system time after starting.
+Normally, you only need to double-click to run it. The software's main interface allows you to configure various parameters.
 
-Once completed, it exits immediately and runs no background processes.
-
-It is recommended to install it as a system service, but you can also set it as a startup item according to your preference.
+It is recommended to install it as a system service, but you can also set it as a startup item (by adding the -d parameter), depending on your preference.
 
 ## Configuration
 
