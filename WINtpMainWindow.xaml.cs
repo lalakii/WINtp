@@ -16,8 +16,8 @@ public partial class WINtpMainWindow : Window
         : this()
     {
         var cl = System.Windows.Forms.InputLanguage.CurrentInputLanguage.Culture;
-        var cn = !cl.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
-        if (cn)
+        var en = !cl.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        if (en)
         {
             applyBtn.Content = "Save";
             exitBtn.Content = "Quit";
@@ -123,7 +123,7 @@ public partial class WINtpMainWindow : Window
             Application.Current.Shutdown();
             Environment.Exit(0);
         };
-        var errorMsg = cn ? "找不到文件: \"{0}\"!" : "Missing file: \"{0}\"!";
+        var errorMsg = en ? "Missing file: \"{0}\"!" : "找不到文件: \"{0}\"!";
         applyBtn.Click += (_, _) =>
         {
             serverListDgd.CommitEdit();
@@ -152,7 +152,7 @@ public partial class WINtpMainWindow : Window
             SetValue(appSettings, "Urls", httpUrl);
             pCfg.Save(ConfigurationSaveMode.Modified);
             RunAsBatFile(asm.Location, "wRestart.bat", errorMsg);
-            MessageBox.Show(cn ? "配置已存储!" : "Configuration has been saved!", string.Empty, MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(en ? "Configuration has been saved!" : "配置已存储!", string.Empty, MessageBoxButton.OK, MessageBoxImage.Information);
         };
         exitBtn.Click += (_, _) =>
         {
