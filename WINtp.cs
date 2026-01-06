@@ -30,6 +30,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private Timer? timer;
     private bool useSSL;
     private bool verbose;
+    private int agreement;
 
     public static void Main(string[]? args)
     {
@@ -169,11 +170,22 @@ public class WINtp : System.ServiceProcess.ServiceBase
             {
                 var sh = evt.SafeWaitHandle;
                 DateTime? time = null;
+                var isNtp = config.RequestType == NtpRequestType;
+                if (isNtp && agreement == 1)
+                {
+                    return;
+                }
+
+                if (!isNtp && agreement == 0)
+                {
+                    return;
+                }
+
                 while (!sh.IsClosed)
                 {
                     try
                     {
-                        time = config.RequestType == NtpRequestType ? this.GetNtpTime(serverUrl) : this.GetHttpTime(serverUrl);
+                        time = isNtp ? this.GetNtpTime(serverUrl) : this.GetHttpTime(serverUrl);
                     }
                     catch
                     {
@@ -208,7 +220,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
         else
         {
             List<TimeSynchronizationOptions> configs = [];
-            var cfgPath = Path.Combine(Path.GetDirectoryName(Wintp.Location), "WINtp.exe.config");
+            var cfgPath = $"{Wintp.Location}.config";
             if (!File.Exists(cfgPath))
             {
                 using var pCfg = File.Create(cfgPath);
@@ -232,6 +244,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 _ = int.TryParse($"{reader.GetValue("Delay", typeof(int))}", out delay);
                 _ = int.TryParse($"{reader.GetValue("Timeout", typeof(int))}", out timeout);
                 _ = int.TryParse($"{reader.GetValue("NetworkTimeout", typeof(int))}", out netTimeout);
+                _ = int.TryParse($"{reader.GetValue("Agreement‌", typeof(int))}", out agreement);
                 AddAll(configs, $"{reader.GetValue("Ntps", typeof(string))}".Split(';'), true);
                 AddAll(configs, $"{reader.GetValue("Urls", typeof(string))}".Split(';'), false);
             }

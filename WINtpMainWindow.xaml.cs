@@ -3,20 +3,22 @@ using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using WinForms = System.Windows.Forms;
 
 public partial class WINtpMainWindow : Window
 {
     public WINtpMainWindow()
     {
-        System.Windows.Forms.Application.EnableVisualStyles();
+        WinForms.Application.EnableVisualStyles();
         InitializeComponent();
     }
 
     public WINtpMainWindow(List<WINtp.TimeSynchronizationOptions> configs)
         : this()
     {
-        var cl = System.Windows.Forms.InputLanguage.CurrentInputLanguage.Culture;
+        var cl = WinForms.InputLanguage.CurrentInputLanguage.Culture;
         var en = !cl.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        string[] modes = ["仅 NTP", "仅 HTTP", "NTP 和 HTTP"];
         if (en)
         {
             applyBtn.Content = "Save";
@@ -38,29 +40,35 @@ public partial class WINtpMainWindow : Window
             uninstallBtn.Content = "Uninstall Service";
             Title = "WINtp Settings - ";
             moreTbk.Text = "Get Help: ";
+            modeTbk.Text = "Time Sync Protocol: ";
+            modes = ["NTP Only", "HTTP Only", "NTP and HTTP"];
         }
 
         var asm = typeof(WINtp).Assembly;
         Title += $" Version {asm.GetName().Version}";
-        currentTimeDpk.CustomFormat = cl.DateTimeFormat.FullDateTimePattern;
-        DataTable dt1 = new();
-        dt1.Columns.Add("Id");
-        dt1.Columns.Add("Type");
-        dt1.Rows.Add(WINtp.NtpRequestType, "NTP");
-        dt1.Rows.Add(WINtp.HttpRequestType, "HTTP");
-        typeListCbx.DisplayMemberPath = "Type";
-        typeListCbx.SelectedValuePath = "Id";
-        typeListCbx.ItemsSource = dt1.DefaultView;
-        DataTable dt = new();
-        dt.Columns.Add("Url");
-        dt.Columns.Add("Type");
-        serverListDgd.ItemsSource = dt.DefaultView;
-        foreach (var item in configs)
+        foreach (string it in modes)
         {
-            dt.Rows.Add(item.HostName, item.RequestType);
+            modeCbx.Items.Add(it);
         }
 
+        DataSet ds = new();
+        var cbxDt = ds.Tables.Add("cbx_table");
+        cbxDt.Columns.Add("Id");
+        cbxDt.Columns.Add("Type");
+        cbxDt.Rows.Add(WINtp.NtpRequestType, "NTP");
+        cbxDt.Rows.Add(WINtp.HttpRequestType, "HTTP");
+        typeListCbx.ItemsSource = cbxDt.DefaultView;
+        var listDt = ds.Tables.Add("list_table");
+        listDt.Columns.Add("Url");
+        listDt.Columns.Add("TypeId");
+        foreach (var it in configs)
+        {
+            listDt.Rows.Add(it.HostName, it.RequestType);
+        }
+
+        serverListDgd.ItemsSource = listDt.DefaultView;
         timeoutNud.Maximum = netTimeoutNud.Maximum = timeSyncNud.Maximum = int.MaxValue;
+        modeCbx.SelectionChanged += (_, e) => useSslCbx.IsEnabled = modeCbx.SelectedIndex != 0;
         var pCfg = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
         foreach (KeyValueConfigurationElement it in pCfg.AppSettings.Settings)
         {
@@ -110,10 +118,25 @@ public partial class WINtpMainWindow : Window
                     }
 
                     break;
+                case "Agreement":
+                    if (decimal.TryParse(it.Value, out numberValue))
+                    {
+                        switch (numberValue)
+                        {
+                            case 0:
+                            case 1:
+                            case 2:
+                                modeCbx.SelectedIndex = (int)numberValue;
+                                break;
+                        }
+                    }
+
+                    break;
             }
         }
 
-        System.Windows.Forms.Timer t = new() { Interval = 300, };
+        currentTimeDpk.CustomFormat = cl.DateTimeFormat.FullDateTimePattern;
+        WinForms.Timer t = new() { Interval = 300, };
         t.Tick += (_, _) => currentTimeDpk.Value = DateTime.Now;
         Loaded += (_, _) => t.Start();
         Closing += (_, _) =>
@@ -129,15 +152,15 @@ public partial class WINtpMainWindow : Window
             serverListDgd.CommitEdit();
             string ntpUrl = string.Empty;
             string httpUrl = string.Empty;
-            foreach (DataRow item in dt.Rows)
+            foreach (DataRow it in listDt.Rows)
             {
-                if (int.TryParse($"{item[1]}", out int type) && type == WINtp.HttpRequestType)
+                if (int.TryParse($"{it[1]}", out int type) && type == WINtp.HttpRequestType)
                 {
-                    httpUrl += $"{item[0]};";
+                    httpUrl += $"{it[0]};";
                 }
                 else
                 {
-                    ntpUrl += $"{item[0]};";
+                    ntpUrl += $"{it[0]};";
                 }
             }
 
@@ -148,25 +171,21 @@ public partial class WINtpMainWindow : Window
             SetValue(appSettings, "Timeout", $"{timeoutNud.Value}");
             SetValue(appSettings, "NetworkTimeout", $"{netTimeoutNud.Value}");
             SetValue(appSettings, "Delay", $"{timeSyncNud.Value}");
+            SetValue(appSettings, "Agreement", $"{modeCbx.SelectedIndex}");
             SetValue(appSettings, "Ntps", ntpUrl);
             SetValue(appSettings, "Urls", httpUrl);
             pCfg.Save(ConfigurationSaveMode.Modified);
             RunAsBatFile(asm.Location, "wRestart.bat", errorMsg);
             MessageBox.Show(en ? "Configuration has been saved!" : "配置已存储!", string.Empty, MessageBoxButton.OK, MessageBoxImage.Information);
         };
-        exitBtn.Click += (_, _) =>
-        {
-            Close();
-        };
-        homeUri.RequestNavigate += (_, e) => Process.Start(e.Uri.AbsoluteUri);
-        homeUri2.RequestNavigate += (_, e) => Process.Start(e.Uri.AbsoluteUri);
         installBtn.Click += (_, _) => RunAsBatFile(asm.Location, "wInstall.bat", errorMsg);
         uninstallBtn.Click += (_, _) => RunAsBatFile(asm.Location, "wUninstall.bat", errorMsg);
+        exitBtn.Click += (_, _) => Close();
     }
 
     private static void RunAsBatFile(string exePath, string batName, string errorMsg)
     {
-        var scriptBat = Path.Combine(Path.GetDirectoryName(exePath), batName);
+        var scriptBat = Path.Combine(Path.GetDirectoryName(exePath), "Scripts", batName);
         if (File.Exists(scriptBat))
         {
             Process.Start(scriptBat);
@@ -187,5 +206,10 @@ public partial class WINtpMainWindow : Window
         {
             collection.Add(key, value);
         }
+    }
+
+    private void Navigate(object o, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        Process.Start(e.Uri.AbsoluteUri);
     }
 }

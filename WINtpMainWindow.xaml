@@ -4,8 +4,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:wf="clr-namespace:System.Windows.Forms;assembly=System.Windows.Forms"
         xmlns:wfi="clr-namespace:System.Windows.Forms.Integration;assembly=WindowsFormsIntegration"
-        Title="WINtp 设置 - " 
         MinHeight="350"
+        Title="WINtp 设置 - "
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterScreen">
     <Grid>
@@ -33,7 +33,7 @@
                 <Setter Property="TextWrapping" Value="Wrap"/>
             </Style>
             <Style TargetType="wfi:WindowsFormsHost">
-                <Setter Property="MinWidth" Value="100"/>
+                <Setter Property="MinWidth" Value="120"/>
             </Style>
             <Style TargetType="DataGrid">
                 <Setter Property="Margin" Value="2,5"/>
@@ -42,9 +42,6 @@
             <Style TargetType="TextBox">
                 <Setter Property="Margin" Value="2,5"/>
                 <Setter Property="Padding" Value="0,2"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
-            </Style>
-            <Style TargetType="Grid">
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <Style TargetType="GroupBox">
@@ -83,17 +80,18 @@
             <DataGrid x:Name="serverListDgd" MaxWidth="280" CanUserReorderColumns="False" AutoGenerateColumns="False" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="域名" x:Name="domainDgc"  Binding="{Binding Url}" MinWidth="150" />
-                    <DataGridComboBoxColumn Header="协议" SelectedValueBinding="{Binding Type}" MinWidth="80" x:Name="typeListCbx"/>
+                    <DataGridComboBoxColumn Header="协议" SelectedValueBinding="{Binding TypeId}" SelectedValuePath="Id" DisplayMemberPath="Type" MinWidth="80" x:Name="typeListCbx"/>
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>
-        <GroupBox Grid.Column="1" Grid.Row="1" Grid.RowSpan="7" x:Name="configTbk" Header="软件配置">
+        <GroupBox Grid.Column="1" Grid.Row="1" Grid.RowSpan="7" x:Name="configTbk" Header="软件配置" MinWidth="280">
             <StackPanel>
                 <CheckBox Content="自动同步时间" x:Name="autoSyncCbx"/>
                 <CheckBox Content="使用SSL"  x:Name="useSslCbx"/>
                 <CheckBox Content="日志输出" x:Name="logPrintCbx"/>
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
@@ -118,11 +116,13 @@
                         <wf:NumericUpDown x:Name="timeSyncNud"/>
                     </wfi:WindowsFormsHost>
                     <TextBlock Text="秒" HorizontalAlignment="Left" Grid.Row="2" Grid.Column="2" x:Name="secondTbk"/>
+                    <TextBlock Text="协议类型: " x:Name="modeTbk" Grid.Column="0" Grid.Row="3"/>
+                    <ComboBox Grid.Row="3" Grid.Column="1" Name="modeCbx" />
                 </Grid>
             </StackPanel>
         </GroupBox>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Grid.Column="1" Grid.Row="8">
-            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,12">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
@@ -136,10 +136,10 @@
                     <Button Content="卸载服务" x:Name="uninstallBtn" HorizontalAlignment="Center"/>
                     <Button Content="退出程序" x:Name="exitBtn" HorizontalAlignment="Center"/>
                 </WrapPanel>
-                <TextBlock Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" HorizontalAlignment="Center"><Run Text="获取帮助: " x:Name="moreTbk" />
-                    <Hyperlink NavigateUri="https://wintp.sourceforge.io" x:Name="homeUri">https://wintp.sourceforge.io</Hyperlink>
+                <TextBlock Grid.Column="0" Grid.Row="2" Grid.ColumnSpan="2" TextAlignment="Center" HorizontalAlignment="Center"><Run Text="获取帮助: " x:Name="moreTbk" />
+                    <Hyperlink NavigateUri="https://wintp.sourceforge.io" RequestNavigate="Navigate">https://wintp.sourceforge.io</Hyperlink>
                     <LineBreak/>
-                    <Hyperlink NavigateUri="https://github.com/lalakii/WINtp" x:Name="homeUri2">https://github.com/lalakii/WINtp</Hyperlink>
+                    <Hyperlink NavigateUri="https://github.com/lalakii/WINtp" RequestNavigate="Navigate">https://github.com/lalakii/WINtp</Hyperlink>
                 </TextBlock>
             </Grid>
         </ScrollViewer>

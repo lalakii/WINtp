@@ -30,6 +30,15 @@
 		<EnableCOMHosting>False</EnableCOMHosting>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="Scripts\**" />
+	  <EmbeddedResource Remove="Scripts\**" />
+	  <None Remove="Scripts\**" />
+	  <Page Remove="Scripts\**" />
+	</ItemGroup>
+	<ItemGroup>
+		<Compile Update="WINtpMainWindow.xaml.cs">
+			<SubType>Code</SubType>
+		</Compile>
 		<None Remove=".gitignore" />
 		<None Remove="WINtp.exe.config" />
 		<Content Include="wintp.ico" />
