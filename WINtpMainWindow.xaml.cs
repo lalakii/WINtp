@@ -16,8 +16,8 @@ public partial class WINtpMainWindow : Window
         : this()
     {
         var cl = System.Windows.Forms.InputLanguage.CurrentInputLanguage.Culture;
-        var cn = cl.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
-        if (!cn)
+        var cn = !cl.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
+        if (cn)
         {
             applyBtn.Content = "Save";
             exitBtn.Content = "Quit";
@@ -32,8 +32,8 @@ public partial class WINtpMainWindow : Window
             netTimeoutTbk.Text = "Network Timeout: ";
             timeoutTbk.Text = "Sync Timeout: ";
             intervalTbk.Text = "Sync Interval: ";
-            millsecondTbk0.Text = millsecondTbk1.Text = "ms";
-            secondTbk.Text = "s";
+            millsecondTbk0.Text = millsecondTbk1.Text = "milliseconds";
+            secondTbk.Text = "seconds";
             installBtn.Content = "Install Service";
             uninstallBtn.Content = "Uninstall Service";
             Title = "WINtp Settings - ";
@@ -123,6 +123,7 @@ public partial class WINtpMainWindow : Window
             Application.Current.Shutdown();
             Environment.Exit(0);
         };
+        var errorMsg = cn ? "找不到文件: \"{0}\"!" : "Missing file: \"{0}\"!";
         applyBtn.Click += (_, _) =>
         {
             serverListDgd.CommitEdit();
@@ -150,6 +151,7 @@ public partial class WINtpMainWindow : Window
             SetValue(appSettings, "Ntps", ntpUrl);
             SetValue(appSettings, "Urls", httpUrl);
             pCfg.Save(ConfigurationSaveMode.Modified);
+            RunAsBatFile(asm.Location, "wRestart.bat", errorMsg);
             MessageBox.Show(cn ? "配置已存储!" : "Configuration has been saved!", string.Empty, MessageBoxButton.OK, MessageBoxImage.Information);
         };
         exitBtn.Click += (_, _) =>
@@ -158,7 +160,6 @@ public partial class WINtpMainWindow : Window
         };
         homeUri.RequestNavigate += (_, e) => Process.Start(e.Uri.AbsoluteUri);
         homeUri2.RequestNavigate += (_, e) => Process.Start(e.Uri.AbsoluteUri);
-        var errorMsg = cn ? "找不到文件: \"{0}\"!" : "Missing file: \"{0}\"!";
         installBtn.Click += (_, _) => RunAsBatFile(asm.Location, "wInstall.bat", errorMsg);
         uninstallBtn.Click += (_, _) => RunAsBatFile(asm.Location, "wUninstall.bat", errorMsg);
     }

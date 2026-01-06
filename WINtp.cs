@@ -7,8 +7,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("2.1.0.0")]
-[assembly: AssemblyFileVersion("2.1.0.0")]
+[assembly: AssemblyVersion("2.2.0.0")]
+[assembly: AssemblyFileVersion("2.2.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 lalaki.cn")]
 
@@ -60,13 +60,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
         base.OnStop();
     }
 
-    private static void ShowWindow(List<TimeSynchronizationOptions> configs)
-    {
-        Thread.CurrentThread.SetApartmentState(ApartmentState.Unknown);
-        Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
-        new Application().Run(new WINtpMainWindow(configs));
-    }
-
     private static void AddAll(List<TimeSynchronizationOptions> configs, string[] items, bool isNtp)
     {
         foreach (var it in items)
@@ -101,6 +94,16 @@ public class WINtp : System.ServiceProcess.ServiceBase
         st.Second = (short)t.Second;
         st.Millisecond = (short)t.Millisecond;
         SetSystemTime(ref st);
+    }
+
+    private void ShowWindow(List<TimeSynchronizationOptions> configs, object? args)
+    {
+        if (this.ServiceHandle == IntPtr.Zero && args == null)
+        {
+            Thread.CurrentThread.SetApartmentState(ApartmentState.Unknown);
+            Thread.CurrentThread.SetApartmentState(ApartmentState.STA);
+            new Application().Run(new WINtpMainWindow(configs));
+        }
     }
 
     private DateTime GetNtpTime(string ntpServerUrl)
@@ -271,11 +274,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     ThreadPool.UnsafeQueueUserWorkItem(this.LoadProfileOrGetNetworkTime, it);
                 }
 
-                if (args == null && this.ServiceHandle == IntPtr.Zero)
-                {
-                    ShowWindow(configs);
-                }
-
+                ShowWindow(configs, args);
                 if (!evt.SafeWaitHandle.IsClosed && !evt.WaitOne(timeout < 1 ? 30000 : timeout))
                 {
                     LogPrintln("Timeout occurred while fetching network time. Please check the logs for details.", TimeoutError);
@@ -299,7 +298,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
             }
             else
             {
-                ShowWindow(configs);
+                ShowWindow(configs, args);
             }
         }
     }
