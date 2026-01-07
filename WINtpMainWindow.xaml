@@ -101,12 +101,12 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="网络超时: " x:Name="netTimeoutTbk" Grid.Row="0" Grid.Column="0"/>
+                    <TextBlock Text="程序超时: " x:Name="timeoutTbk"  Grid.Row="0" Grid.Column="0"/>
                     <wfi:WindowsFormsHost Grid.Row="0" Grid.Column="1">
                         <wf:NumericUpDown x:Name="timeoutNud"/>
                     </wfi:WindowsFormsHost>
+                    <TextBlock Text="网络超时: " x:Name="netTimeoutTbk" Grid.Row="1" Grid.Column="0"/>
                     <TextBlock Text="毫秒" Grid.Row="0" Grid.Column="2" x:Name="millsecondTbk0"/>
-                    <TextBlock Text="程序超时: " x:Name="timeoutTbk"  Grid.Row="1" Grid.Column="0"/>
                     <wfi:WindowsFormsHost Grid.Row="1" Grid.Column="1">
                         <wf:NumericUpDown x:Name="netTimeoutNud"/>
                     </wfi:WindowsFormsHost>

@@ -192,7 +192,7 @@ public partial class WINtpMainWindow : Window
         }
         else
         {
-            MessageBox.Show(string.Format(errorMsg, batName), null, MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(string.Format(errorMsg, scriptBat), null, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

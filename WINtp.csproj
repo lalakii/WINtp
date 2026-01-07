@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<GetDate>$([System.DateTime]::Now.ToString(yyyy-MM-dd))</GetDate>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<AssemblyName>WINtp</AssemblyName>
-		<OutputPath>.\bin\WINtp\$(GetDate)</OutputPath>
+		<OutputPath>.\bin\WINtpExe\</OutputPath>
 		<OutputType>WinExe</OutputType>
 		<LangVersion>preview</LangVersion>
 		<TargetFrameworks>net481</TargetFrameworks>
@@ -30,17 +29,19 @@
 		<EnableCOMHosting>False</EnableCOMHosting>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="Scripts\**" />
-	  <EmbeddedResource Remove="Scripts\**" />
-	  <None Remove="Scripts\**" />
-	  <Page Remove="Scripts\**" />
-	</ItemGroup>
-	<ItemGroup>
+		<EmbeddedResource Remove="Scripts\**" />
+		<Compile Remove="Scripts\**" />
+		<None Remove="Scripts\**" />
+		<Page Remove="Scripts\**" />
+		<None Remove="LICENSE" />
+		<None Remove="README.md" />
+		<None Remove="README_en.md" />
+		<None Remove="wintp.jpg" />
+		<None Remove=".gitignore" />
+		<None Remove="WINtp.exe.config" />
 		<Compile Update="WINtpMainWindow.xaml.cs">
 			<SubType>Code</SubType>
 		</Compile>
-		<None Remove=".gitignore" />
-		<None Remove="WINtp.exe.config" />
 		<Content Include="wintp.ico" />
 		<EmbeddedResource Include="WINtp.exe.config">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
