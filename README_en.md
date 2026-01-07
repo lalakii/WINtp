@@ -18,9 +18,9 @@ I created this tool. It now supports retrieving time from websites using the TCP
 ## Downloads
 
 - [Github](https://github.com/lalakii/WINtp/releases)
-- [Lanzou 1](https://a01.lanzout.com/iM5Qw3fc4owb)
-- [Lanzou 2](https://a01.lanzoui.com/iM5Qw3fc4owb)
-- [Lanzou 3](https://a01.lanzouv.com/iM5Qw3fc4owb)
+- [Lanzou 1](https://a01.lanzoui.com/ic1VC3fisbcd)
+- [Lanzou 2](https://a01.lanzout.com/ic1VC3fisbcd)
+- [Lanzou 3](https://a01.lanzouv.com/ic1VC3fisbcd)
 
 ## How to use it?
 
@@ -42,6 +42,7 @@ It is recommended to install it as a system service, but you can also set it as 
 		<add key="Timeout" value="30000" /> <!-- The timeout for a single request is 30,000 milliseconds (30 seconds) by default. -->
 		<add key="NetworkTimeout" value="5000" /> <!-- Network timeout, default 5000 milliseconds -->
 		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- NTP Servers -->
+		<add key="Agreement" value="0" /> <!-- 0 NTP Only, 1 HTTP Only, 2 Both -->
 		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- WebWebsite domain(hostname) -->
 	</appSettings>
 </configuration>

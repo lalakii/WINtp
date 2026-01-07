@@ -18,9 +18,9 @@
 ## 下载地址
 
 - [本地下载](https://github.com/lalakii/WINtp/releases)
-- [蓝奏云 1](https://a01.lanzout.com/iM5Qw3fc4owb)
-- [蓝奏云 2](https://a01.lanzoui.com/iM5Qw3fc4owb)
-- [蓝奏云 3](https://a01.lanzouv.com/iM5Qw3fc4owb)
+- [蓝奏云 1](https://a01.lanzout.com/ic1VC3fisbcd)
+- [蓝奏云 2](https://a01.lanzoui.com/ic1VC3fisbcd)
+- [蓝奏云 3](https://a01.lanzouv.com/ic1VC3fisbcd)
 
 ## 如何使用？
 
@@ -41,6 +41,7 @@
 		<add key="Delay" value="3600" /> <!-- 时间同步周期，默认3600秒 -->
 		<add key="Timeout" value="30000" /> <!-- 单个请求超时，默认30000毫秒(30秒) -->
 		<add key="NetworkTimeout" value="5000" /> <!-- 网络超时，默认5000毫秒(5秒) -->
+		<add key="Agreement" value="0" /> <!-- 0 仅 NTP, 1 仅 HTTP, 2 NTP 和 HTTP -->
 		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- ntp服务器 -->
 		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- 网站域名 -->
 	</appSettings>
