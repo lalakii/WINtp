@@ -7,8 +7,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("2.2.0.0")]
-[assembly: AssemblyFileVersion("2.2.0.0")]
+[assembly: AssemblyVersion("2.3.0.0")]
+[assembly: AssemblyFileVersion("2.3.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 lalaki.cn")]
 
@@ -31,6 +31,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private bool useSSL;
     private bool verbose;
     private int agreement;
+    private int complete;
 
     public static void Main(string[]? args)
     {
@@ -83,19 +84,8 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
     // stackoverflow.com/a/20847931/28134812
     [DllImport("kernel32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern bool SetSystemTime(ref SystemTime st);
-
-    private static void Win32SetSystemTime(DateTime t)
-    {
-        st.Year = (short)t.Year;
-        st.Month = (short)t.Month;
-        st.Day = (short)t.Day;
-        st.Hour = (short)t.Hour;
-        st.Minute = (short)t.Minute;
-        st.Second = (short)t.Second;
-        st.Millisecond = (short)t.Millisecond;
-        SetSystemTime(ref st);
-    }
 
     private void ShowWindow(List<TimeSynchronizationOptions> configs, object? args)
     {
@@ -116,14 +106,39 @@ public class WINtp : System.ServiceProcess.ServiceBase
             SendTimeout = this.netTimeout,
             ReceiveTimeout = this.netTimeout,
         };
+        ulong ticks = (ulong)DateTime.UtcNow.Subtract(TimeOf1900).Ticks;
+        ulong seconds = ticks / TimeSpan.TicksPerSecond;
+        ulong fraction = ((ticks % TimeSpan.TicksPerSecond) << 32) / TimeSpan.TicksPerSecond;
+        BitConverter.GetBytes(IPAddress.HostToNetworkOrder((long)(seconds << 32 | fraction))).CopyTo(data, 24);
         udp.SendTo(data, new IPEndPoint(Dns.GetHostAddresses(ntpServerUrl).FirstOrDefault(), 123));
         udp.Receive(data);
-        long intPart = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(data, 40)) & 0xFFFFFFFFL;
-        long fractPart = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(data, 44)) & 0xFFFFFFFFL;
-        long milliseconds = (intPart * 1000) + ((fractPart * 1000) >> 32);
-        var ntpDate = TimeOf1900.AddMilliseconds(milliseconds).ToUniversalTime();
-        Console.WriteLine("Time: {0}, NTP Server: {1}", ntpDate, ntpServerUrl);
-        return ntpDate;
+        if (data[1] < 16)
+        {
+            ulong t3 = (ulong)IPAddress.NetworkToHostOrder(BitConverter.ToInt64(data, 40));
+            seconds = t3 >> 32;
+            fraction = (uint)t3;
+            ulong milliseconds = (seconds * 1000UL) + ((fraction * 1000UL) >> 32);
+            return TimeOf1900.AddMilliseconds(milliseconds).ToUniversalTime();
+        }
+
+        throw new SocketException();
+    }
+
+    private DateTime GetHttpTime(string httpUrl)
+    {
+        if (!httpUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            httpUrl = $"{(useSSL ? "https://" : "http://")}{httpUrl}";
+        }
+
+        var req = (HttpWebRequest)WebRequest.Create(httpUrl);
+        req.Method = "HEAD";
+        req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0";
+        req.Timeout = this.netTimeout;
+        req.ReadWriteTimeout = this.netTimeout;
+        req.ContinueTimeout = this.netTimeout;
+        using var httpResposne = (HttpWebResponse)req.GetResponse();
+        return Convert.ToDateTime(httpResposne.Headers["Date"]).ToUniversalTime();
     }
 
     private void LogPrintln(string errorMsg, int errorCode)
@@ -141,25 +156,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
     }
 
-    private DateTime GetHttpTime(string httpUrl)
-    {
-        if (!httpUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        {
-            httpUrl = $"{(useSSL ? "https://" : "http://")}{httpUrl}";
-        }
-
-        var req = (HttpWebRequest)WebRequest.Create(httpUrl);
-        req.Method = "HEAD";
-        req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0";
-        req.Timeout = this.netTimeout;
-        req.ReadWriteTimeout = this.netTimeout;
-        req.ContinueTimeout = this.netTimeout;
-        using var httpResposne = (HttpWebResponse)req.GetResponse();
-        var httpDate = Convert.ToDateTime(httpResposne.Headers["Date"]).ToUniversalTime();
-        Console.WriteLine("Time: {0}, HTTP Server: {1}", httpDate, httpUrl);
-        return httpDate;
-    }
-
     private void LoadProfileOrGetNetworkTime(object? args)
     {
         if (args is TimeSynchronizationOptions config)
@@ -168,7 +164,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
             var serverUrl = config.HostName;
             if (evt != null && serverUrl != null)
             {
-                var sh = evt.SafeWaitHandle;
                 DateTime? time = null;
                 var isNtp = config.RequestType == NtpRequestType;
                 if (isNtp && agreement == 1)
@@ -181,40 +176,42 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     return;
                 }
 
-                while (!sh.IsClosed)
+                while (complete == 0)
                 {
                     try
                     {
                         time = isNtp ? this.GetNtpTime(serverUrl) : this.GetHttpTime(serverUrl);
+                        break;
                     }
                     catch
                     {
                         LogPrintln(string.Format("Unable to connect to the server({0}). Failed to sync network time.", serverUrl), NetworkConnectionError);
-                        if (!sh.IsClosed)
-                        {
-                            Thread.Sleep(1000);
-                            continue;
-                        }
-
-                        Thread.CurrentThread.Abort();
-                    }
-
-                    break;
-                }
-
-                if (!sh.IsClosed)
-                {
-                    evt.Set();
-                }
-
-                if (!sh.IsClosed && time is DateTime local)
-                {
-                    evt.Close();
-                    if (this.autoSync)
-                    {
-                        Win32SetSystemTime(local);
+                        Thread.Sleep(1000);
                     }
                 }
+
+                if (Interlocked.CompareExchange(ref complete, 1, 0) != 0)
+                {
+                    Console.WriteLine($"Abort: {serverUrl}");
+                    Thread.CurrentThread.Abort();
+                    return;
+                }
+
+                if (this.autoSync && time is DateTime t)
+                {
+                    st.Year = (short)t.Year;
+                    st.Month = (short)t.Month;
+                    st.Day = (short)t.Day;
+                    st.Hour = (short)t.Hour;
+                    st.Minute = (short)t.Minute;
+                    st.Second = (short)t.Second;
+                    st.Millisecond = (short)t.Millisecond;
+                    SetSystemTime(ref st);
+
+                    // LogPrintln($"Sync: {serverUrl}, Time: {t.ToLocalTime()} {t.ToLocalTime().Millisecond}", 0);
+                }
+
+                evt.Set();
             }
         }
         else
@@ -272,6 +269,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 Console.WriteLine("Delay: {0}", delay);
                 Console.WriteLine("Timeout: {0}", timeout);
                 Console.WriteLine("NetworkTimeout: {0}", netTimeout);
+                Console.WriteLine("Agreement: {0}", agreement);
                 foreach (var item in configs)
                 {
                     Console.WriteLine("Server: {0}, Type: {1}", item.HostName, item.RequestType);
@@ -280,7 +278,8 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
             if (configs.Count != 0)
             {
-                ManualResetEvent evt = new(false);
+                complete = 0;
+                ManualResetEventSlim evt = new();
                 foreach (var it in configs)
                 {
                     it.ResetEvent = evt;
@@ -288,7 +287,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 }
 
                 ShowWindow(configs, args);
-                if (!evt.SafeWaitHandle.IsClosed && !evt.WaitOne(timeout < 1 ? 30000 : timeout))
+                if (!evt.Wait(timeout < 1 ? 30000 : timeout) && this.ServiceHandle == IntPtr.Zero)
                 {
                     LogPrintln("Timeout occurred while fetching network time. Please check the logs for details.", TimeoutError);
                     Environment.FailFast(string.Empty);
@@ -303,11 +302,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     }
                     else
                     {
-                        this.timer = new(_ => this.OnStart(null), null, 0, this.delay * 1000);
+                        this.timer = new(_ => this.OnStart(null), null, this.delay * 1000, this.delay * 1000);
                     }
                 }
-
-                Thread.Sleep(3000);
             }
             else
             {
@@ -335,6 +332,6 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
         public int RequestType { get; set; }
 
-        public ManualResetEvent? ResetEvent { get; set; }
+        public ManualResetEventSlim? ResetEvent { get; set; }
     }
 }
