@@ -9,7 +9,7 @@
 
 [ [中文](./README.md) | [English](./README_en.md) ]
 
-## 适用于 Windows 操作系统的时钟同步小工具
+## 适用于 Windows 操作系统的时间同步小工具
 
 因为 Windows 默认的时间同步似乎有点缓慢，所以我制作了它，
 
@@ -18,9 +18,9 @@
 ## 下载地址
 
 - [本地下载](https://github.com/lalakii/WINtp/releases)
-- [蓝奏云 1](https://a01.lanzout.com/i7vaf3fwuffg)
-- [蓝奏云 2](https://a01.lanzoui.com/i7vaf3fwuffg)
-- [蓝奏云 3](https://a01.lanzouv.com/i7vaf3fwuffg)
+- [蓝奏云 1](https://a01.lanzoui.com/iJk6U3goeb0j)
+- [蓝奏云 2](https://a01.lanzout.com/iJk6U3goeb0j)
+- [蓝奏云 3](https://a01.lanzouv.com/iJk6U3goeb0j)
 
 ## 如何使用？
 
@@ -28,24 +28,39 @@
 
 推荐将其安装为系统服务，也可以自行设置为开机启动项(加 -d 参数)，可根据自己的喜好决定。
 
-## 配置文件示例
+## 时间同步设置
 
-```xml
-<?xml version="1.0" encoding="utf-8" ?>
-<configuration>
-	<appSettings>
-		<add key="AutoSyncTime" value="false" />
-		<!-- 自动同步系统时间的开关，此参数默认为 false 目的为了防止杀软误报，用户应当手动设为true -->
-		<add key="Verbose" value="false" /> <!-- 在事件管理器中打印日志 -->
-		<add key="UseSsl" value="false" /> <!-- 使用https协议 -->
-		<add key="Delay" value="3600" /> <!-- 时间同步周期，默认3600秒 -->
-		<add key="Timeout" value="30000" /> <!-- 单个请求超时，默认30000毫秒(30秒) -->
-		<add key="NetworkTimeout" value="5000" /> <!-- 网络超时，默认5000毫秒(5秒) -->
-		<add key="Agreement" value="0" /> <!-- 0 仅 NTP, 1 仅 HTTP, 2 NTP 和 HTTP -->
-		<add key="Ntps" value="time.asia.apple.com;ntp.tencent.com;ntp.aliyun.com;rhel.pool.ntp.org;" /> <!-- ntp服务器 -->
-		<add key="Urls" value="www.baidu.com;www.qq.com;www.google.com;" /> <!-- 网站域名 -->
-	</appSettings>
-</configuration>
-```
+配置文件已改为JSON格式，建议在图形界面上配置参数。
+
+### 同步方式
+
+- **停止时间同步**  
+  完全关闭时间同步功能，软件不再对系统时间做任何调整。
+
+- **立即修改时间**  
+  获取到准确的网络时间后，立即强制将系统时间设置为网络时间（step / 跳变方式）。  
+  *注意*：时间跳变可能导致某些对时间敏感的应用程序（数据库、日志系统、日历软件等）出现异常。
+
+- **渐进加速优先（高精度）**  
+  仅适用于Win11操作系统。  
+  通过逐渐加速或减慢系统时钟的速率（slew / 渐进调整），让本地时间平滑地趋近网络时间。  
+  能有效避免时间跳变，适合对时钟连续性要求较高的场景。
+
+- **渐进加速优先**  
+  与高精度模式行为相同，但采用旧版本的实现算法，用于兼容早期版本的用户或特定旧系统环境。
+
+### 时间偏移量
+允许用户手动设置一个固定的时间偏移（单位通常为秒或毫秒）。
+
+- 正值：本地时间比网络时间**提前**（快多少秒/毫秒）
+- 负值：本地时间比网络时间**滞后**（慢多少秒/毫秒）
+
+### 误差范围
+当网络时间与本地时间的差值**小于**此范围时，软件将**不会**执行同步操作。
+
+- 推荐值：45 ms
+- 作用：避免频繁设置系统时间
+
+...
 
 ## By lalaki.cn

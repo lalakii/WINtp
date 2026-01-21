@@ -77,20 +77,25 @@
             </wfi:WindowsFormsHost>
         </Grid>
         <GroupBox Grid.Column="0" Grid.Row="1" Header="服务器列表" x:Name="serverListTbk" Grid.RowSpan="8">
-            <DataGrid x:Name="serverListDgd" MaxWidth="280" CanUserReorderColumns="False" AutoGenerateColumns="False" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <DataGrid x:Name="serverListDgd" MaxWidth="380" CanUserReorderColumns="False" AutoGenerateColumns="False" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="域名" x:Name="domainDgc"  Binding="{Binding Url}" MinWidth="150" />
-                    <DataGridComboBoxColumn Header="协议" SelectedValueBinding="{Binding TypeId}" SelectedValuePath="Id" DisplayMemberPath="Type" MinWidth="80" x:Name="typeListCbx"/>
+                    <DataGridComboBoxColumn Header="协议" SelectedValueBinding="{Binding TypeId}" SelectedValuePath="Id" DisplayMemberPath="Type" MinWidth="50" x:Name="typeListCbx"/>
+                    <DataGridTextColumn Header="优先级" x:Name="priorityDgc"  Binding="{Binding Priority}" MinWidth="15" />
+                    <DataGridCheckBoxColumn Header="启用" x:Name="enabledDgc"  Binding="{Binding Enabled}" MinWidth="15" />
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>
         <GroupBox Grid.Column="1" Grid.Row="1" Grid.RowSpan="7" x:Name="configTbk" Header="软件配置" MinWidth="280">
             <StackPanel>
-                <CheckBox Content="自动同步时间" x:Name="autoSyncCbx"/>
-                <CheckBox Content="使用SSL"  x:Name="useSslCbx"/>
-                <CheckBox Content="日志输出" x:Name="logPrintCbx"/>
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
@@ -98,27 +103,40 @@
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="程序超时: " x:Name="timeoutTbk"  Grid.Row="0" Grid.Column="0"/>
-                    <wfi:WindowsFormsHost Grid.Row="0" Grid.Column="1">
+                    <TextBlock Text="同步方式: " x:Name="syncModeTbk" Grid.Column="0" Grid.Row="0" Margin="0,10,0,20"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Name="syncModeCbx" Margin="0,10,0,20"/>
+                    <TextBlock Text="偏移量: " x:Name="offsetTbk" Grid.Column="0" Grid.Row="1" />
+                    <Slider x:Name="offsetSdr" Grid.Column="1" Grid.Row="1" Minimum="-10" Maximum="10" MinWidth="120" VerticalAlignment="Center"/>
+                    <Button Content="复位" x:Name="offsetResetBtn" MinHeight="0" MinWidth="36" Grid.Column="2" HorizontalAlignment="Stretch" Grid.Row="1" Margin="5,2,2,2" Padding="8,0"/>
+                    <TextBlock x:Name="offsetValueTbk" Grid.Column="1" Grid.Row="2" VerticalAlignment="Top" HorizontalAlignment="Center"/>
+                    <TextBlock Text="误差范围: " x:Name="deviationTbk" Grid.Column="0" Grid.Row="3"/>
+                    <Slider x:Name="deviationSdr" Grid.Column="1" Grid.Row="3" Minimum="0" Maximum="5" MinWidth="120" VerticalAlignment="Center"/>
+                    <Button Content="复位" x:Name="deviationResetBtn" MinHeight="0" MinWidth="36" Grid.Column="2" HorizontalAlignment="Stretch" Grid.Row="3" Margin="5,2,2,2" Padding="8,0"/>
+                    <TextBlock x:Name="deviationValueTbk" Grid.Column="1" Grid.Row="4" VerticalAlignment="Top" HorizontalAlignment="Center"/>
+                    <Border Height="1" Background="#E0E0E0" VerticalAlignment="Top" Margin="0,0,0,5" Grid.Column="0" Grid.Row="5" Grid.ColumnSpan="3"/>
+                    <TextBlock Text="协议类型: " x:Name="modeTbk" Grid.Column="0" Grid.Row="6"/>
+                    <ComboBox Grid.Row="6" Grid.Column="1" Name="modeCbx" />
+                    <TextBlock Text="程序超时: " x:Name="timeoutTbk"  Grid.Row="7" Grid.Column="0"/>
+                    <wfi:WindowsFormsHost Grid.Row="7" Grid.Column="1">
                         <wf:NumericUpDown x:Name="timeoutNud"/>
                     </wfi:WindowsFormsHost>
-                    <TextBlock Text="网络超时: " x:Name="netTimeoutTbk" Grid.Row="1" Grid.Column="0"/>
-                    <TextBlock Text="毫秒" Grid.Row="0" Grid.Column="2" x:Name="millsecondTbk0"/>
-                    <wfi:WindowsFormsHost Grid.Row="1" Grid.Column="1">
+                    <TextBlock Text="毫秒" Grid.Row="7" Grid.Column="2" x:Name="millsecondTbk0"  HorizontalAlignment="Left"/>
+                    <TextBlock Text="网络超时: " x:Name="netTimeoutTbk" Grid.Row="8" Grid.Column="0"/>
+                    <wfi:WindowsFormsHost Grid.Row="8" Grid.Column="1">
                         <wf:NumericUpDown x:Name="netTimeoutNud"/>
                     </wfi:WindowsFormsHost>
-                    <TextBlock Text="毫秒" Grid.Row="1" Grid.Column="2" x:Name="millsecondTbk1"/>
-                    <TextBlock Text="同步周期: " x:Name="intervalTbk"  Grid.Row="2" Grid.Column="0"/>
-                    <wfi:WindowsFormsHost Grid.Row="2" Grid.Column="1">
+                    <TextBlock Text="毫秒" Grid.Row="8" Grid.Column="2" x:Name="millsecondTbk1"  HorizontalAlignment="Left"/>
+                    <TextBlock Text="同步周期: " x:Name="intervalTbk"  Grid.Row="9" Grid.Column="0"/>
+                    <wfi:WindowsFormsHost Grid.Row="9" Grid.Column="1">
                         <wf:NumericUpDown x:Name="timeSyncNud"/>
                     </wfi:WindowsFormsHost>
-                    <TextBlock Text="秒" HorizontalAlignment="Left" Grid.Row="2" Grid.Column="2" x:Name="secondTbk"/>
-                    <TextBlock Text="协议类型: " x:Name="modeTbk" Grid.Column="0" Grid.Row="3"/>
-                    <ComboBox Grid.Row="3" Grid.Column="1" Name="modeCbx" />
+                    <TextBlock Text="秒" HorizontalAlignment="Left" Grid.Row="9" Grid.Column="2" x:Name="secondTbk"/>
                 </Grid>
+                <CheckBox Content="使用SSL"  x:Name="useSslCbx"/>
+                <CheckBox Content="日志输出" x:Name="logPrintCbx"/>
             </StackPanel>
         </GroupBox>
         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" Grid.Column="1" Grid.Row="8">
