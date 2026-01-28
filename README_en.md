@@ -18,9 +18,9 @@ I created this tool. It now supports retrieving time from websites using the TCP
 ## Downloads
 
 - [Github](https://github.com/lalakii/WINtp/releases)
-- [Lanzou 1](https://a01.lanzoui.com/iJk6U3goeb0j)
-- [Lanzou 2](https://a01.lanzout.com/iJk6U3goeb0j)
-- [Lanzou 3](https://a01.lanzouv.com/iJk6U3goeb0j)
+- [Lanzou 1](https://a01.lanzoui.com/iSrAb3h7qqxi)
+- [Lanzou 2](https://a01.lanzout.com/iSrAb3h7qqxi)
+- [Lanzou 3](https://a01.lanzouv.com/iSrAb3h7qqxi)
 
 ## How to use it?
 
@@ -67,6 +67,13 @@ If the difference between network time and local time is **less than** this thre
 
 - Recommended value: 45 ms  
 - Purpose: Prevents unnecessary frequent adjustments to the system clock caused by minor network jitter or small drifts.
+
+### Priority
+The smaller the number, the higher the priority.
+Time will be obtained from the server with the highest priority first.
+
+### Disable Windows Time Service
+When checked, disables the built-in time synchronization service of Windows.
 
 ...
 

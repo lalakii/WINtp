@@ -135,7 +135,8 @@
                     </wfi:WindowsFormsHost>
                     <TextBlock Text="秒" HorizontalAlignment="Left" Grid.Row="9" Grid.Column="2" x:Name="secondTbk"/>
                 </Grid>
-                <CheckBox Content="使用SSL"  x:Name="useSslCbx"/>
+                <CheckBox Content="使用 SSL"  x:Name="useSslCbx"/>
+                <CheckBox Content="禁用 Windows Time 服务"  x:Name="disableWin32TimeSyncCbx"/>
                 <CheckBox Content="日志输出" x:Name="logPrintCbx"/>
             </StackPanel>
         </GroupBox>

@@ -6,42 +6,48 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
+using System.Text;
 using System.Windows;
 
 [assembly: AssemblyProduct("WINtp")]
-[assembly: AssemblyVersion("2.4.0.0")]
-[assembly: AssemblyFileVersion("2.4.0.0")]
+[assembly: AssemblyVersion("2.5.0.0")]
+[assembly: AssemblyFileVersion("2.5.0.0")]
 [assembly: AssemblyTitle("A Simple NTP Client")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 lalaki.cn")]
 
-[System.ComponentModel.DesignerCategory("")]
-public class WINtp : System.ServiceProcess.ServiceBase
+public class WINtp(WINtp.WINtpServiceConfig serviceConfig, int netTimeout) : System.ServiceProcess.ServiceBase
 {
     public const int ProgressiveDelay = 800;
     public const int NtpRequestType = 0;
     public const int HttpRequestType = 1;
-#pragma warning disable CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
-#pragma warning disable SA1401 // Fields should be private
-    public WINtpServiceConfig mConfig;
-#pragma warning restore SA1401 // Fields should be private
-#pragma warning restore CS8618 // 在退出构造函数时，不可为 null 的字段必须包含非 null 值。请考虑添加 "required" 修饰符或声明为可为 null。
 #pragma warning disable SA1310 // Field names should not contain underscore
     private const string SE_SYSTEMTIME_NAME = "SeSystemtimePrivilege";
     private const uint SE_PRIVILEGE_ENABLED = 0x00000002;
     private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
     private const uint TOKEN_QUERY = 0x0008;
 #pragma warning restore SA1310 // Field names should not contain underscore
-    private const int NetworkConnectionError = -3;
-    private const int TimeoutError = -1;
     private static readonly string[] ServiceParamsArray = ["-k", "/k"];
     private static readonly string[] NormalParamsArray = ["-d", "/d"];
     private static readonly DateTime TimeOf1900 = new(1900, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
     private static readonly Assembly Wintp = typeof(WINtp).Assembly;
     private static readonly string ConfigPath = $"{Wintp.Location}.json";
+    private static bool permissionIsGranted = false;
     private static SystemTime st;
     private Timer? timer;
     private int complete;
-    private int netTimeout;
+
+    private enum WINtpError
+    {
+        NetworkConnection = -3,
+        Timeout,
+    }
+
+    private enum TOKEN_INFORMATION_CLASS
+    {
+        TokenUser = 1,
+        TokenGroups,
+        TokenPrivileges,
+    }
 
     public static void Main(string[]? args)
     {
@@ -60,7 +66,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 }
                 catch
                 {
-                    Console.WriteLine("json serializer failed!");
+                    Console.WriteLine("E: JSON Serialization Failed!");
                 }
             }
 
@@ -70,12 +76,14 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 {
                     SyncMode = 0,
                     Offset = 0,
+                    DeviationOffset = 0,
                     Agreement = 0,
                     Timeout = 30000,
                     NetworkTimeout = 5000,
                     Delay = 3600,
                     UseSsl = false,
                     Verbose = false,
+                    UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0",
                     Hosts = new() { ["ntp.tencent.com"] = new(0, 0, true), ["ntp.aliyun.com"] = new(0, 0, true), ["time.cloudflare.com"] = new(0, 0, true), ["time.asia.apple.com"] = new(0, 0, true), ["rhel.pool.ntp.org"] = new(0, 0, true), ["www.baidu.com"] = new(1, 1, true), ["www.qq.com"] = new(1, 1, true), ["www.163.com"] = new(1, 1, true), },
                 };
                 json.SetLength(0);
@@ -83,7 +91,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
             }
         }
 
-        using WINtp ntp = new() { mConfig = pConfig, netTimeout = (int)pConfig.NetworkTimeout };
+        using WINtp ntp = new(pConfig, (int)pConfig.NetworkTimeout);
         var userStarted = false;
         if (args is string[] argments && argments.Length > 0)
         {
@@ -93,7 +101,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
             }
             else if (NormalParamsArray.Contains(argments.LastOrDefault(), StringComparer.OrdinalIgnoreCase))
             {
-                ntp.LoadProfileOrGetNetworkTime(argments);
+                ntp.LoadProfileOrGetNetworkTime(0);
             }
             else
             {
@@ -107,7 +115,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
         if (userStarted)
         {
-            if (ntp.mConfig.Verbose && AllocConsole())
+            if (pConfig.Verbose && AllocConsole())
             {
                 var asmName = Wintp.GetName();
                 Console.Title = $"{asmName.Name} Logcat - Version: {asmName.Version}";
@@ -115,6 +123,11 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
             ntp.LoadProfileOrGetNetworkTime(null);
         }
+    }
+
+    public WINtpServiceConfig GetConfig()
+    {
+        return serviceConfig;
     }
 
     public void SaveConfig()
@@ -132,38 +145,68 @@ public class WINtp : System.ServiceProcess.ServiceBase
         }
 
         using var json = File.Create(ConfigPath);
-        serializer.WriteObject(json, mConfig);
+        serializer.WriteObject(json, serviceConfig);
+        Verbose("SaveConfig");
     }
 
     protected override void OnStart(string[]? args)
     {
         base.OnStart(args);
-        ThreadPool.UnsafeQueueUserWorkItem(this.LoadProfileOrGetNetworkTime, args);
+        this.LoadProfileOrGetNetworkTime(new object?[] { null });
+        LogPrintln("INFO: WINtp Service Started", 0);
     }
 
     protected override void OnStop()
     {
+        LogPrintln("INFO: WINtp Service Stopped", 0);
         this.timer?.Dispose();
         base.OnStop();
     }
 
     private static bool RequestPermission()
     {
-        var permissionIsGranted = false;
-        if (OpenProcessToken(Process.GetCurrentProcess().Handle, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr hToken) && LookupPrivilegeValue(null, SE_SYSTEMTIME_NAME, out LUID luid))
+        if (!permissionIsGranted && OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr hToken) && LookupPrivilegeValue(IntPtr.Zero, new(SE_SYSTEMTIME_NAME), out LUID luid))
         {
-            TOKEN_PRIVILEGES tp = new() { PrivilegeCount = 1, Privileges = [new() { Luid = luid, Attributes = SE_PRIVILEGE_ENABLED }] };
-            if (AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero))
+            _ = GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges, IntPtr.Zero, 0, out uint returnLength);
+            if (returnLength > 0)
             {
-                permissionIsGranted = true;
-                Console.WriteLine($"PermissionIsGranted: {permissionIsGranted}");
+                var pTokenPrivs = Marshal.AllocHGlobal((int)returnLength);
+                if (GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenPrivileges, pTokenPrivs, returnLength, out _))
+                {
+                    var tp = Marshal.PtrToStructure<TOKEN_PRIVILEGES>(pTokenPrivs);
+                    var item = pTokenPrivs + sizeof(uint);
+                    int itemSize = Marshal.SizeOf<LUID_AND_ATTRIBUTES>();
+                    for (int i = 0; i < tp.PrivilegeCount; i++)
+                    {
+                        var privilege = Marshal.PtrToStructure<LUID_AND_ATTRIBUTES>(item);
+                        var outLuid = privilege.Luid;
+                        uint cchName = 100;
+                        StringBuilder name = new((int)cchName);
+                        if (luid.LowPart == outLuid.LowPart && luid.HighPart == outLuid.HighPart && LookupPrivilegeName(IntPtr.Zero, ref outLuid, name, ref cchName))
+                        {
+                            permissionIsGranted = (privilege.Attributes & SE_PRIVILEGE_ENABLED) != 0;
+                            if (!permissionIsGranted)
+                            {
+                                tp = new() { PrivilegeCount = 1, Privileges = [new() { Luid = luid, Attributes = SE_PRIVILEGE_ENABLED }] };
+                                permissionIsGranted = AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                                Console.WriteLine($"I: PermissionIsGranted: {SE_SYSTEMTIME_NAME}");
+                            }
+
+                            break;
+                        }
+
+                        item += itemSize;
+                    }
+                }
+
+                Marshal.FreeHGlobal(pTokenPrivs);
             }
 
-            if (hToken != IntPtr.Zero)
-            {
-                var status = CloseHandle(hToken);
-                Console.WriteLine($"Token Handle Closed: {status}");
-            }
+            _ = CloseHandle(hToken);
+        }
+        else if (permissionIsGranted)
+        {
+            Console.WriteLine("I: PermissionIsGranted: Skip");
         }
 
         return permissionIsGranted;
@@ -172,7 +215,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private static bool SetSystemTimeUnstable(DateTime t)
     {
         bool supported = true;
-        if (RequestPermission() && GetSystemTimeAdjustmentPrecise(out ulong lpTimeAdjustment, out ulong lpTimeIncrement, out bool lpTimeAdjustmentDisabled))
+        if (RequestPermission() && GetSystemTimeAdjustmentPrecise(out _, out ulong lpTimeIncrement, out _))
         {
             ulong timeAdjustment;
             double tmpMs;
@@ -214,7 +257,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
     private static bool SetSystemTimeLegacy(DateTime t)
     {
         bool supported = true;
-        if (RequestPermission() && GetSystemTimeAdjustment(out uint lpTimeAdjustment, out uint lpTimeIncrement, out bool lpTimeAdjustmentDisabled))
+        if (RequestPermission() && GetSystemTimeAdjustment(out _, out uint lpTimeIncrement, out _))
         {
             uint timeAdjustment;
             double tmpMs;
@@ -269,6 +312,10 @@ public class WINtp : System.ServiceProcess.ServiceBase
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern IntPtr GetConsoleWindow();
 
+    [DllImport("kernel32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern IntPtr GetCurrentProcess();
+
     // stackoverflow.com/a/20847931/28134812
     [DllImport("kernel32.dll")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
@@ -294,14 +341,22 @@ public class WINtp : System.ServiceProcess.ServiceBase
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     private static extern bool SetSystemTimeAdjustmentPrecise(ulong dwTimeAdjustment, bool bTimeAdjustmentDisabled);
 
-    [DllImport("advapi32.dll")]
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-    private static extern bool LookupPrivilegeValue(string? lpSystemName, string lpName, out LUID lpLuid);
+    private static extern bool LookupPrivilegeValue(IntPtr lpSystemName, StringBuilder lpName, out LUID lpLuid);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern bool LookupPrivilegeName(IntPtr lpSystemName, ref LUID lpLuid, StringBuilder lpName, ref uint cchName);
 
     [DllImport("advapi32.dll")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
 #pragma warning disable SA1313 // Parameter names should begin with lower-case letter
     private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("advapi32.dll")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern bool GetTokenInformation(IntPtr TokenHandle, TOKEN_INFORMATION_CLASS TokenInformationClass, IntPtr TokenInformation, uint TokenInformationLength, out uint ReturnLength);
 
     [DllImport("advapi32.dll")]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
@@ -315,7 +370,7 @@ public class WINtp : System.ServiceProcess.ServiceBase
             var t = Thread.CurrentThread;
             t.SetApartmentState(ApartmentState.Unknown);
             t.SetApartmentState(ApartmentState.STA);
-            new Application().Run(new WINtpMainWindow(Wintp, this));
+            new Application().Run(new WINtpMainWindow(this, Wintp));
         }
     }
 
@@ -325,8 +380,8 @@ public class WINtp : System.ServiceProcess.ServiceBase
         data[0] = 0x1B;
         using Socket udp = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
         {
-            SendTimeout = this.netTimeout,
-            ReceiveTimeout = this.netTimeout,
+            SendTimeout = netTimeout,
+            ReceiveTimeout = netTimeout,
         };
         ulong ticks = (ulong)DateTime.UtcNow.Subtract(TimeOf1900).Ticks;
         ulong seconds = ticks / TimeSpan.TicksPerSecond;
@@ -346,16 +401,16 @@ public class WINtp : System.ServiceProcess.ServiceBase
         throw new SocketException();
     }
 
-    private DateTime GetHttpTime(string httpUrl)
+    private DateTime GetHttpTime(string url)
     {
-        if (!httpUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         {
-            httpUrl = $"{(mConfig.UseSsl ? "https://" : "http://")}{httpUrl}";
+            url = $"{(serviceConfig.UseSsl ? "https://" : "http://")}{url}";
         }
 
-        var req = (HttpWebRequest)WebRequest.Create(httpUrl);
+        var req = (HttpWebRequest)WebRequest.Create(url);
         req.Method = "HEAD";
-        req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0";
+        req.UserAgent = serviceConfig.UserAgent;
         req.Timeout = netTimeout;
         req.ReadWriteTimeout = netTimeout;
         req.ContinueTimeout = netTimeout;
@@ -363,24 +418,43 @@ public class WINtp : System.ServiceProcess.ServiceBase
         return Convert.ToDateTime(httpResposne.Headers["Date"]).ToUniversalTime();
     }
 
-    private void LogPrintln(string errorMsg, int errorCode)
+    private void LogPrintln(string errorMsg, object errorCode)
     {
-        if (mConfig.Verbose)
+        if (serviceConfig.Verbose)
         {
             try
             {
-                using EventLog log = new("Application", ".", errorMsg);
-                log.WriteEntry($"程序路径: {Wintp.Location}\r\n代码: {errorCode}, 可在 https://wintp.sourceforge.io/ 获取帮助。", EventLogEntryType.Error);
+                var len = errorMsg.Length;
+                if (len > 50)
+                {
+                    len = 50;
+                }
+
+                using EventLog log = new("Application", ".", errorMsg.Substring(0, len - 1));
+                log.WriteEntry($"程序路径: {Wintp.Location}\r\n代码: {errorCode}\r\n完整信息: {errorMsg}, 可在 https://wintp.sourceforge.io/ 获取帮助。", EventLogEntryType.Error);
             }
-            catch
+            catch (Exception e)
             {
+                Console.WriteLine("E: EventLog Write Failed!" + e.Message);
             }
+        }
+    }
+
+    private void Verbose(string msg)
+    {
+        if (serviceConfig.Verbose)
+        {
+            Console.WriteLine(msg);
         }
     }
 
     private void LoadProfileOrGetNetworkTime(object? args)
     {
-        if (args is TimeSynchronizationOptions config)
+        if (args is object[] objArgs && objArgs.Length == 1)
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(this.LoadProfileOrGetNetworkTime, objArgs[0]);
+        }
+        else if (args is TimeSynchronizationOptions config)
         {
             var useForcedTime = false;
             var evt = config.ResetEvent;
@@ -389,12 +463,12 @@ public class WINtp : System.ServiceProcess.ServiceBase
             {
                 DateTime? time = null;
                 var isNtp = config.RequestType == NtpRequestType;
-                if (isNtp && mConfig.Agreement == 1)
+                if (isNtp && serviceConfig.Agreement == 1)
                 {
                     return;
                 }
 
-                if (!isNtp && mConfig.Agreement == 0)
+                if (!isNtp && serviceConfig.Agreement == 0)
                 {
                     return;
                 }
@@ -408,21 +482,20 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     }
                     catch
                     {
-                        LogPrintln($"Unable to connect to the server({serverUrl}). Failed to sync network time.", NetworkConnectionError);
+                        LogPrintln($"Unable to connect to the server({serverUrl}). Failed to sync network time.", WINtpError.NetworkConnection);
                         Thread.Sleep(1000);
                     }
                 }
 
                 if (Interlocked.CompareExchange(ref complete, 1, 0) != 0)
                 {
-                    Console.WriteLine($"Ignored: {serverUrl}");
-                    Thread.CurrentThread.Abort();
+                    Verbose($"Ignored: {serverUrl}");
                     return;
                 }
 
                 if (time is DateTime t)
                 {
-                    var offset = mConfig.Offset;
+                    var offset = serviceConfig.Offset;
                     if (offset != 0)
                     {
                         t = t.AddMilliseconds(offset * 1000);
@@ -431,20 +504,16 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     DateTime localTime = t.ToLocalTime(); // 注意，这个 localTime 表示由网络时间转换的本地时间，本地电脑时间使用 DateTime.Now 获取
                     var localPCTime = DateTime.Now;
                     var d = Math.Abs((localTime - localPCTime).TotalMilliseconds);
-                    var deviationOffset = mConfig.DeviationOffset * 1000;
+                    var deviationOffset = serviceConfig.DeviationOffset * 1000;
                     if (d < deviationOffset)
                     {
-                        if (mConfig.Verbose)
-                        {
-                            Console.WriteLine($"Current Deviation: {d}, Max Deviation: {deviationOffset}, Skip Time Sync");
-                        }
-
+                        Verbose($"Current Deviation: {d}, Max Deviation: {deviationOffset}, Skip Time Sync");
                         return;
                     }
 
                     if (localTime >= localPCTime)
                     {
-                        switch (mConfig.SyncMode)
+                        switch (serviceConfig.SyncMode)
                         {
                             case 1:
                                 useForcedTime = true;
@@ -457,41 +526,49 @@ public class WINtp : System.ServiceProcess.ServiceBase
                                 }
                                 catch
                                 {
-                                    if (mConfig.Verbose)
-                                    {
-                                        Console.WriteLine("SetSystemTimeUnstable Not Supported!");
-                                    }
+                                    Verbose("E: SetSystemTimeUnstable Not Supported!");
                                 }
 
                                 if (!unstableIsSupported)
                                 {
                                     useForcedTime = true;
+                                    if (serviceConfig.HighPrecisionSupported != false)
+                                    {
+                                        serviceConfig.HighPrecisionSupported = false;
+                                        SaveConfig();
+                                    }
                                 }
-                                else if (mConfig.Verbose)
+                                else
                                 {
-                                    var l = DateTime.Now;
-                                    Console.WriteLine($"[Unstable] Sync: {serverUrl}, Time: {localTime} {localTime.Millisecond}\r\n\tLocal Time: {l} {l.Millisecond}");
+                                    if (serviceConfig.HighPrecisionSupported != true)
+                                    {
+                                        serviceConfig.HighPrecisionSupported = true;
+                                        SaveConfig();
+                                    }
+
+                                    if (serviceConfig.Verbose)
+                                    {
+                                        var l = DateTime.Now;
+                                        Console.WriteLine($"[Unstable] Sync: {serverUrl}, Time: {localTime} {localTime.Millisecond}\r\n\t   End Time: {l} {l.Millisecond}");
+                                    }
                                 }
 
+                                Verbose($"HighPrecisionSupported: {serviceConfig.HighPrecisionSupported}");
                                 break;
                             case 3:
                                 if (!SetSystemTimeLegacy(localTime))
                                 {
                                     useForcedTime = true;
                                 }
-                                else if (mConfig.Verbose)
+                                else if (serviceConfig.Verbose)
                                 {
                                     var l = DateTime.Now;
-                                    Console.WriteLine($"[Legacy] Sync: {serverUrl}, Time: {localTime} {localTime.Millisecond}\r\n\tLocal Time: {l} {l.Millisecond}");
+                                    Console.WriteLine($"[Legacy] Sync: {serverUrl}, Time: {localTime} {localTime.Millisecond}\r\n\t   End Time: {l} {l.Millisecond}");
                                 }
 
                                 break;
                             default:
-                                if (mConfig.Verbose)
-                                {
-                                    Console.WriteLine("Stop TimeSync");
-                                }
-
+                                Verbose("Stop TimeSync");
                                 break;
                         }
                     }
@@ -502,46 +579,76 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
                     if (useForcedTime)
                     {
-                        st.Year = (short)t.Year;
-                        st.Month = (short)t.Month;
-                        st.Day = (short)t.Day;
-                        st.Hour = (short)t.Hour;
-                        st.Minute = (short)t.Minute;
-                        st.Second = (short)t.Second;
-                        st.Millisecond = (short)t.Millisecond;
+                        st.Year = (ushort)t.Year;
+                        st.Month = (ushort)t.Month;
+                        st.Day = (ushort)t.Day;
+                        st.Hour = (ushort)t.Hour;
+                        st.Minute = (ushort)t.Minute;
+                        st.Second = (ushort)t.Second;
+                        st.Millisecond = (ushort)t.Millisecond;
                         _ = RequestPermission();
                         SetSystemTime(ref st);
-                        if (mConfig.Verbose)
+                        if (serviceConfig.Verbose)
                         {
                             var deviationMs = localPCTime - localTime;
                             var l = DateTime.Now;
                             Console.WriteLine($"[Force Set] Sync: {serverUrl}, Time: {l} {l.Millisecond}");
                         }
                     }
-                }
 
-                evt.Set();
+                    LogPrintln($"INFO: [{DateTime.Now}] TimeSync Success", 0);
+                    evt.Set();
+                }
             }
         }
         else
         {
-            var hosts = mConfig.Hosts;
-            if (mConfig.Verbose)
+            var hosts = serviceConfig.Hosts;
+            if (serviceConfig.Verbose)
             {
-                Console.WriteLine("Verbose: {0}", mConfig.Verbose);
-                Console.WriteLine("SyncMode: {0}", mConfig.SyncMode);
-                Console.WriteLine("UseSsl: {0}", mConfig.UseSsl);
-                Console.WriteLine("Timeout: {0}", mConfig.Timeout);
-                Console.WriteLine("NetworkTimeout: {0}", mConfig.NetworkTimeout);
-                Console.WriteLine("Delay: {0}", mConfig.Delay);
-                Console.WriteLine("Agreement: {0}", mConfig.Agreement);
+                StringBuilder info = new();
+                info.AppendLine($"Verbose: {serviceConfig.Verbose}");
+                info.AppendLine($"SyncMode: {serviceConfig.SyncMode}");
+                info.AppendLine($"HighPrecisionSupported: {serviceConfig.HighPrecisionSupported}");
+                info.AppendLine($"UseSsl: {serviceConfig.UseSsl}");
+                info.AppendLine($"Timeout: {serviceConfig.Timeout}");
+                info.AppendLine($"NetworkTimeout: {serviceConfig.NetworkTimeout}");
+                info.AppendLine($"Delay: {serviceConfig.Delay}");
+                info.AppendLine($"Agreement: {serviceConfig.Agreement}");
+                info.AppendLine($"DisableWin32Time: {serviceConfig.DisableWin32Time}");
+                info.AppendLine($"UserAgent: {serviceConfig.UserAgent}");
                 if (hosts != null)
                 {
                     foreach (var item in hosts)
                     {
-                        Console.WriteLine("Server: {0}, Type: {1}", item.Key, item.Value.Type);
+                        info.AppendLine($"Server: {item.Key}, Type: {item.Value.Type} Priority: {item.Value.Priority}");
                     }
                 }
+
+                Console.WriteLine(info.ToString());
+                LogPrintln(info.ToString(), 0);
+            }
+
+            var keyName = "SYSTEM\\CurrentControlSet\\Services\\W32Time\\Parameters";
+            var type = serviceConfig.DisableWin32Time ? "NoSync" : "NTP";
+            try
+            {
+                using var subKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyName, true);
+                var oldType = $"{subKey.GetValue("Type", string.Empty)}";
+                Verbose($"I: Windows Time Service OldType: {oldType}, NewType: {type}");
+                if (!type.Equals(oldType, StringComparison.OrdinalIgnoreCase))
+                {
+                    subKey.SetValue("Type", type);
+                    Verbose($"I: Windows Time Service Set Type: {type}");
+                }
+                else
+                {
+                    Verbose($"I: Windows Time Service Current Type: {type}");
+                }
+            }
+            catch
+            {
+                Verbose($"E: Registry read/write failed!({keyName} - {type})");
             }
 
             List<TimeSynchronizationOptions> configs = [];
@@ -553,9 +660,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
                     {
                         configs.Add(new() { HostName = it.Key, RequestType = it.Value.Type, Priority = it.Value.Priority });
                     }
-                    else if (mConfig.Verbose)
+                    else
                     {
-                        Console.WriteLine($"Disabled: {it.Key}");
+                        Verbose($"Disabled: {it.Key}");
                     }
                 }
             }
@@ -568,20 +675,24 @@ public class WINtp : System.ServiceProcess.ServiceBase
                 foreach (var it in configs)
                 {
                     it.ResetEvent = evt;
-                    ThreadPool.UnsafeQueueUserWorkItem(this.LoadProfileOrGetNetworkTime, it);
+                    this.LoadProfileOrGetNetworkTime(new object[] { it });
                 }
 
                 ShowWindow(args);
-                int timeout = (int)mConfig.Timeout;
+                int timeout = (int)serviceConfig.Timeout;
                 if (!evt.Wait(timeout < 1 ? 30000 : timeout) && this.ServiceHandle == IntPtr.Zero)
                 {
-                    LogPrintln("Timeout occurred while fetching network time. Please check the logs for details.", TimeoutError);
+                    LogPrintln("Timeout occurred while fetching network time. Please check the logs for details.", WINtpError.Timeout);
                     Environment.FailFast(string.Empty);
+                }
+                else
+                {
+                    LogPrintln($"INFO: WINtp Service Running, Time: {DateTime.Now}", 0);
                 }
 
                 if (args != null && this.timer == null)
                 {
-                    int delay = (int)mConfig.Delay * 1000;
+                    int delay = (int)serviceConfig.Delay * 1000;
                     if (delay < 1)
                     {
                         Thread.Sleep(3000);
@@ -625,14 +736,14 @@ public class WINtp : System.ServiceProcess.ServiceBase
     [StructLayout(LayoutKind.Sequential)]
     private struct SystemTime
     {
-        public short Year;
-        public short Month;
-        public short DayOfWeek;
-        public short Day;
-        public short Hour;
-        public short Minute;
-        public short Second;
-        public short Millisecond;
+        public ushort Year;
+        public ushort Month;
+        public ushort DayOfWeek;
+        public ushort Day;
+        public ushort Hour;
+        public ushort Minute;
+        public ushort Second;
+        public ushort Millisecond;
     }
 
     public class TimeSynchronizationOptions
@@ -652,6 +763,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
         [DataMember(Name = "syncMode")]
         public int SyncMode { get; set; }
 
+        [DataMember(Name = "highPrecision")]
+        public bool HighPrecisionSupported { get; set; }
+
         [DataMember(Name = "offset")]
         public double Offset { get; set; }
 
@@ -664,6 +778,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
         [DataMember(Name = "useSsl")]
         public bool UseSsl { get; set; }
 
+        [DataMember(Name = "disableWin32Time")]
+        public bool DisableWin32Time { get; set; }
+
         [DataMember(Name = "delay")]
         public decimal Delay { get; set; }
 
@@ -675,6 +792,9 @@ public class WINtp : System.ServiceProcess.ServiceBase
 
         [DataMember(Name = "agreement")]
         public int Agreement { get; set; }
+
+        [DataMember(Name = "userAgent")]
+        public string? UserAgent { get; set; }
 
         [DataMember(Name = "hosts")]
         public Dictionary<string, HostValue>? Hosts { get; set; }

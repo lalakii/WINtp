@@ -14,7 +14,7 @@ public partial class WINtpMainWindow : Window
         InitializeComponent();
     }
 
-    public WINtpMainWindow(Assembly asm, WINtp wintp)
+    public WINtpMainWindow(WINtp wintp, Assembly asm)
         : this()
     {
         var cl = WinForms.InputLanguage.CurrentInputLanguage.Culture;
@@ -56,6 +56,7 @@ public partial class WINtpMainWindow : Window
             deviationTbk.Text = "Tolerance: ";
             priorityDgc.Header = "Priority";
             enabledDgc.Header = "Enabled";
+            disableWin32TimeSyncCbx.Content = "Disable Windows Time Service";
         }
 
         Title += $" Version {asm.GetName().Version}";
@@ -69,7 +70,7 @@ public partial class WINtpMainWindow : Window
             syncModeCbx.Items.Add(it);
         }
 
-        modeCbx.SelectionChanged += (_, e) => useSslCbx.IsEnabled = modeCbx.SelectedIndex != 0;
+        modeCbx.SelectionChanged += (_, _) => useSslCbx.IsEnabled = modeCbx.SelectedIndex != 0;
         DataSet ds = new();
         var cbxDt = ds.Tables.Add("cbx_table");
         cbxDt.Columns.Add("Id");
@@ -84,7 +85,7 @@ public partial class WINtpMainWindow : Window
         listDt.Columns.Add("Enabled");
         serverListDgd.ItemsSource = listDt.DefaultView;
         timeoutNud.Maximum = netTimeoutNud.Maximum = timeSyncNud.Maximum = int.MaxValue;
-        var config = wintp.mConfig;
+        var config = wintp.GetConfig();
         if (config != null)
         {
             if (config.Hosts != null)
@@ -121,6 +122,7 @@ public partial class WINtpMainWindow : Window
             timeSyncNud.Value = config.Delay;
             logPrintCbx.IsChecked = config.Verbose;
             useSslCbx.IsChecked = config.UseSsl;
+            disableWin32TimeSyncCbx.IsChecked = config.DisableWin32Time;
         }
 
         currentTimeDpk.CustomFormat = cl.DateTimeFormat.FullDateTimePattern;
@@ -163,6 +165,7 @@ public partial class WINtpMainWindow : Window
                 config.Delay = timeSyncNud.Value;
                 config.Verbose = logPrintCbx.IsChecked == true;
                 config.UseSsl = useSslCbx.IsChecked == true;
+                config.DisableWin32Time = disableWin32TimeSyncCbx.IsChecked == true;
                 config.Hosts = newHosts;
                 wintp.SaveConfig();
             }

@@ -18,9 +18,9 @@
 ## 下载地址
 
 - [本地下载](https://github.com/lalakii/WINtp/releases)
-- [蓝奏云 1](https://a01.lanzoui.com/iJk6U3goeb0j)
-- [蓝奏云 2](https://a01.lanzout.com/iJk6U3goeb0j)
-- [蓝奏云 3](https://a01.lanzouv.com/iJk6U3goeb0j)
+- [蓝奏云 1](https://a01.lanzoui.com/iSrAb3h7qqxi)
+- [蓝奏云 2](https://a01.lanzout.com/iSrAb3h7qqxi)
+- [蓝奏云 3](https://a01.lanzouv.com/iSrAb3h7qqxi)
 
 ## 如何使用？
 
@@ -61,6 +61,11 @@
 - 推荐值：45 ms
 - 作用：避免频繁设置系统时间
 
+### 优先级
+数字越小优先级**越高**，优先从优先级高的地址获取时间
+
+### 禁用 Windows Time 服务
+勾选后禁用Windows自带的时间同步服务
 ...
 
 ## By lalaki.cn
